@@ -305,72 +305,7 @@ const Game = () => {
         </div>
       </div>
 
-      {/* Individual Player Progress */}
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-        {playerProgress.map((player) => (
-          <div key={player.name} className="card">
-            <h2 className="text-xl font-semibold mb-4 flex items-center">
-              <Users className="mr-2" />
-              {player.name}
-            </h2>
-            
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <Target className="w-4 h-4 mr-2 text-green-600" />
-                  Easy Points
-                </span>
-                <span className="font-semibold">
-                  {player.easyPoints}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <Flame className="w-4 h-4 mr-2 text-yellow-600" />
-                  Medium Points
-                </span>
-                <span className="font-semibold">
-                  {player.mediumPoints}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <Trophy className="w-4 h-4 mr-2 text-red-600" />
-                  Hard Points
-                </span>
-                <span className="font-semibold">
-                  {player.hardPoints}
-                </span>
-              </div>
-
-              <div className="border-t pt-3 mt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Points Given:</span>
-                  <span className="font-semibold text-blue-600">{player.pointsGiven}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Points Received:</span>
-                  <span className="font-semibold text-green-600">{player.pointsReceived}</span>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3 bg-purple-50 rounded-lg">
-                <div className="flex items-center justify-center">
-                  <span className="mr-2">Current Level:</span>
-                  <span className={`font-bold ${getLevelColor(player.currentLevel)}`}>
-                    {player.currentLevel.toUpperCase()}
-                  </span>
-                  <span className="ml-2">
-                    {getLevelIcon(player.currentLevel)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+    
 
       {/* Game Controls */}
       <div className="card mb-8">
