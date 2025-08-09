@@ -1,375 +1,465 @@
-import { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { Save, User, Users, Volume2, VolumeX, Palette, RotateCcw, Settings as SettingsIcon, Plus, Minus, Trash2 } from 'lucide-react'
+
+interface GameSettings {
+  players: {
+    names: string[]
+    count: number
+  }
+  preferences: {
+    soundEnabled: boolean
+    theme: 'default' | 'dark' | 'romantic'
+    timerDefault: number
+    autoAdvanceDifficulty: boolean
+  }
+  gameOptions: {
+    showPlayerPhotos: boolean
+    enableCustomCards: boolean
+    showProgress: boolean
+  }
+}
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState('general')
+  const [settings, setSettings] = useState<GameSettings>(() => {
+    const saved = localStorage.getItem('gameSettings')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        // Handle migration from old format
+        if (parsed.playerNames) {
+          return {
+            players: {
+              names: [parsed.playerNames.player1 || 'You', parsed.playerNames.player2 || 'Your Partner'],
+              count: 2
+            },
+            preferences: parsed.preferences || {
+              soundEnabled: true,
+              theme: 'default',
+              timerDefault: 90,
+              autoAdvanceDifficulty: true
+            },
+            gameOptions: parsed.gameOptions || {
+              showPlayerPhotos: false,
+              enableCustomCards: true,
+              showProgress: true
+            }
+          }
+        }
+        return parsed
+      } catch (e) {
+        console.log('Error parsing settings, using defaults:', e)
+      }
+    }
+    return {
+      players: {
+        names: ['You', 'Your Partner'],
+        count: 2
+      },
+      preferences: {
+        soundEnabled: true,
+        theme: 'default' as const,
+        timerDefault: 90,
+        autoAdvanceDifficulty: true
+      },
+      gameOptions: {
+        showPlayerPhotos: false,
+        enableCustomCards: true,
+        showProgress: true
+      }
+    }
+  })
+
+  const [unsavedChanges, setUnsavedChanges] = useState(false)
+
+  // Save settings to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('gameSettings', JSON.stringify(settings))
+    // Dispatch custom event to notify other components
+    window.dispatchEvent(new CustomEvent('settingsChanged'))
+  }, [settings])
+
+  const updatePlayerName = (index: number, name: string) => {
+    setSettings(prev => ({
+      ...prev,
+      players: {
+        ...prev.players,
+        names: prev.players.names.map((n, i) => i === index ? name : n)
+      }
+    }))
+    setUnsavedChanges(true)
+  }
+
+  const addPlayer = () => {
+    if (settings.players.count >= 8) return // Max 8 players
+    
+    setSettings(prev => ({
+      ...prev,
+      players: {
+        names: [...prev.players.names, `Player ${prev.players.count + 1}`],
+        count: prev.players.count + 1
+      }
+    }))
+    setUnsavedChanges(true)
+  }
+
+  const removePlayer = (index: number) => {
+    if (settings.players.count <= 2) return // Min 2 players
+    
+    setSettings(prev => ({
+      ...prev,
+      players: {
+        names: prev.players.names.filter((_, i) => i !== index),
+        count: prev.players.count - 1
+      }
+    }))
+    setUnsavedChanges(true)
+  }
+
+  const updatePreference = <K extends keyof GameSettings['preferences']>(
+    key: K, 
+    value: GameSettings['preferences'][K]
+  ) => {
+    setSettings(prev => ({
+      ...prev,
+      preferences: {
+        ...prev.preferences,
+        [key]: value
+      }
+    }))
+    setUnsavedChanges(true)
+  }
+
+  const updateGameOption = <K extends keyof GameSettings['gameOptions']>(
+    key: K, 
+    value: GameSettings['gameOptions'][K]
+  ) => {
+    setSettings(prev => ({
+      ...prev,
+      gameOptions: {
+        ...prev.gameOptions,
+        [key]: value
+      }
+    }))
+    setUnsavedChanges(true)
+  }
+
+  const saveSettings = () => {
+    // Settings are automatically saved to localStorage via useEffect
+    // This could be extended to save to a server in the future
+    setUnsavedChanges(false)
+    alert('Settings saved successfully!')
+  }
+
+  const resetSettings = () => {
+    if (confirm('Are you sure you want to reset all settings to defaults? This cannot be undone.')) {
+      const defaultSettings: GameSettings = {
+        players: {
+          names: ['You', 'Your Partner'],
+          count: 2
+        },
+        preferences: {
+          soundEnabled: true,
+          theme: 'default',
+          timerDefault: 90,
+          autoAdvanceDifficulty: true
+        },
+        gameOptions: {
+          showPlayerPhotos: false,
+          enableCustomCards: true,
+          showProgress: true
+        }
+      }
+      setSettings(defaultSettings)
+      setUnsavedChanges(false)
+      alert('Settings reset to defaults!')
+    }
+  }
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600">Manage your account preferences and game settings</p>
+    <div className="max-w-4xl mx-auto">
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold text-purple-800 mb-2">Settings</h1>
+        <p className="text-gray-600">Customize your gaming experience</p>
       </div>
 
-      {/* Settings Layout */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Sidebar */}
-        <div className="lg:w-64">
-          <nav className="space-y-1">
-            {[
-              { id: 'general', name: 'General', icon: '⚙️' },
-              { id: 'gameplay', name: 'Gameplay', icon: '🎮' },
-              { id: 'notifications', name: 'Notifications', icon: '🔔' },
-              { id: 'privacy', name: 'Privacy & Security', icon: '🔒' },
-              { id: 'appearance', name: 'Appearance', icon: '🎨' },
-              { id: 'account', name: 'Account', icon: '👤' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center space-x-3 px-4 py-3 text-left rounded-lg transition-colors ${
-                  activeTab === item.id
-                    ? 'bg-primary-50 text-primary-700 border border-primary-200'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <span className="text-lg">{item.icon}</span>
-                <span className="font-medium">{item.name}</span>
-              </button>
-            ))}
-          </nav>
+      {/* Player Management Section */}
+      <div className="card mb-6">
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <Users className="mr-2" />
+          Player Management
+        </h2>
+        
+        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+          <p className="text-sm text-blue-700">
+            <strong>Players:</strong> {settings.players.count} players configured. Games will cycle through all players.
+          </p>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1">
-          <div className="card">
-            {activeTab === 'general' && (
-              <div className="space-y-6">
-                <h2 className="text-lg font-medium text-gray-900">General Settings</h2>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Language
-                    </label>
-                    <select className="input-field">
-                      <option>English (US)</option>
-                      <option>Spanish</option>
-                      <option>French</option>
-                      <option>German</option>
-                      <option>Japanese</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Time Zone
-                    </label>
-                    <select className="input-field">
-                      <option>UTC-5 (Eastern Time)</option>
-                      <option>UTC-8 (Pacific Time)</option>
-                      <option>UTC+0 (GMT)</option>
-                      <option>UTC+1 (Central European Time)</option>
-                    </select>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Auto-save</p>
-                      <p className="text-xs text-gray-500">Automatically save your progress</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
-                  </div>
-                </div>
+        <div className="space-y-3 mb-4">
+          {settings.players.names.map((name, index) => (
+            <div key={index} className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-8 h-8 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+                {index + 1}
               </div>
-            )}
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => updatePlayerName(index, e.target.value)}
+                  placeholder={`Player ${index + 1} name...`}
+                  className="input-field"
+                  maxLength={20}
+                />
+              </div>
+              {settings.players.count > 2 && (
+                <button
+                  onClick={() => removePlayer(index)}
+                  className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                  title="Remove player"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
 
-            {activeTab === 'gameplay' && (
-              <div className="space-y-6">
-                <h2 className="text-lg font-medium text-gray-900">Gameplay Settings</h2>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Difficulty Level
-                    </label>
-                    <select className="input-field">
-                      <option>Easy</option>
-                      <option>Normal</option>
-                      <option>Hard</option>
-                      <option>Expert</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Game Speed
-                    </label>
-                    <div className="space-y-2">
-                      <label className="flex items-center">
-                        <input type="radio" name="speed" value="slow" className="mr-2" />
-                        <span className="text-sm">Slow</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input type="radio" name="speed" value="normal" defaultChecked className="mr-2" />
-                        <span className="text-sm">Normal</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input type="radio" name="speed" value="fast" className="mr-2" />
-                        <span className="text-sm">Fast</span>
-                      </label>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Sound Effects</p>
-                      <p className="text-xs text-gray-500">Play sound effects during gameplay</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Background Music</p>
-                      <p className="text-xs text-gray-500">Play background music</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'notifications' && (
-              <div className="space-y-6">
-                <h2 className="text-lg font-medium text-gray-900">Notification Settings</h2>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Game Invitations</p>
-                      <p className="text-xs text-gray-500">Receive notifications for game invitations</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Achievement Alerts</p>
-                      <p className="text-xs text-gray-500">Get notified when you earn achievements</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Tournament Updates</p>
-                      <p className="text-xs text-gray-500">Receive updates about tournaments</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Daily Challenges</p>
-                      <p className="text-xs text-gray-500">Get reminded about daily challenges</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'privacy' && (
-              <div className="space-y-6">
-                <h2 className="text-lg font-medium text-gray-900">Privacy & Security</h2>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Profile Visibility</p>
-                      <p className="text-xs text-gray-500">Who can see your profile</p>
-                    </div>
-                    <select className="input-field w-auto">
-                      <option>Public</option>
-                      <option>Friends Only</option>
-                      <option>Private</option>
-                    </select>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Show Online Status</p>
-                      <p className="text-xs text-gray-500">Display when you're online</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Allow Friend Requests</p>
-                      <p className="text-xs text-gray-500">Let other players send you friend requests</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Two-Factor Authentication</p>
-                      <p className="text-xs text-gray-500">Add an extra layer of security</p>
-                    </div>
-                    <button className="btn-secondary">Enable</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'appearance' && (
-              <div className="space-y-6">
-                <h2 className="text-lg font-medium text-gray-900">Appearance Settings</h2>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Theme
-                    </label>
-                    <div className="space-y-2">
-                      <label className="flex items-center">
-                        <input type="radio" name="theme" value="light" defaultChecked className="mr-2" />
-                        <span className="text-sm">Light</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input type="radio" name="theme" value="dark" className="mr-2" />
-                        <span className="text-sm">Dark</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input type="radio" name="theme" value="auto" className="mr-2" />
-                        <span className="text-sm">Auto (System)</span>
-                      </label>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Color Scheme
-                    </label>
-                    <div className="grid grid-cols-4 gap-3">
-                      {['blue', 'green', 'purple', 'orange'].map((color) => (
-                        <button
-                          key={color}
-                          className={`w-12 h-12 rounded-lg border-2 ${
-                            color === 'blue' ? 'border-primary-500 bg-primary-500' : 'border-gray-300'
-                          }`}
-                        ></button>
-                      ))}
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Animations</p>
-                      <p className="text-xs text-gray-500">Enable smooth animations</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'account' && (
-              <div className="space-y-6">
-                <h2 className="text-lg font-medium text-gray-900">Account Settings</h2>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      defaultValue="john.doe@example.com"
-                      className="input-field"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Current Password
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="Enter current password"
-                      className="input-field"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      New Password
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="Enter new password"
-                      className="input-field"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Confirm New Password
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="Confirm new password"
-                      className="input-field"
-                    />
-                  </div>
-                  
-                  <div className="pt-4 border-t border-gray-200">
-                    <button className="btn-primary">Update Password</button>
-                  </div>
-                  
-                  <div className="pt-4 border-t border-gray-200">
-                    <h3 className="text-sm font-medium text-red-600 mb-2">Danger Zone</h3>
-                    <button className="btn-secondary bg-red-50 text-red-600 hover:bg-red-100">
-                      Delete Account
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+        <div className="flex gap-3">
+          <button
+            onClick={addPlayer}
+            disabled={settings.players.count >= 8}
+            className={`flex items-center px-4 py-2 rounded-lg font-medium transition-colors ${
+              settings.players.count >= 8
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-green-100 hover:bg-green-200 text-green-700'
+            }`}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Player
+          </button>
+          
+          <div className="text-sm text-gray-500 flex items-center">
+            {settings.players.count >= 8 ? 'Maximum 8 players' : 
+             settings.players.count <= 2 ? 'Minimum 2 players' : 
+             `${8 - settings.players.count} more players can be added`}
           </div>
         </div>
+      </div>
+
+      {/* Game Preferences */}
+      <div className="card mb-6">
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <SettingsIcon className="mr-2" />
+          Game Preferences
+        </h2>
+        
+        <div className="space-y-4">
+          {/* Sound Settings */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center">
+              {settings.preferences.soundEnabled ? (
+                <Volume2 className="w-5 h-5 text-green-600 mr-3" />
+              ) : (
+                <VolumeX className="w-5 h-5 text-red-600 mr-3" />
+              )}
+              <div>
+                <h3 className="font-medium text-gray-800">Sound Effects</h3>
+                <p className="text-sm text-gray-600">Enable timer and game sound effects</p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.preferences.soundEnabled}
+                onChange={(e) => updatePreference('soundEnabled', e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+            </label>
+          </div>
+
+          {/* Theme Settings */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center">
+              <Palette className="w-5 h-5 text-purple-600 mr-3" />
+              <div>
+                <h3 className="font-medium text-gray-800">Theme</h3>
+                <p className="text-sm text-gray-600">Choose your preferred color theme</p>
+              </div>
+            </div>
+            <select
+              value={settings.preferences.theme}
+              onChange={(e) => updatePreference('theme', e.target.value as 'default' | 'dark' | 'romantic')}
+              className="input-field w-auto"
+            >
+              <option value="default">Default Purple</option>
+              <option value="dark">Dark Mode (Coming Soon)</option>
+              <option value="romantic">Romantic Pink (Coming Soon)</option>
+            </select>
+          </div>
+
+          {/* Timer Default */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center">
+              <div className="w-5 h-5 text-orange-600 mr-3 text-center">⏰</div>
+              <div>
+                <h3 className="font-medium text-gray-800">Default Timer Duration</h3>
+                <p className="text-sm text-gray-600">How long each dare should last by default</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="range"
+                min="30"
+                max="300"
+                step="30"
+                value={settings.preferences.timerDefault}
+                onChange={(e) => updatePreference('timerDefault', parseInt(e.target.value))}
+                className="w-24"
+              />
+              <span className="text-sm font-medium text-gray-700 min-w-[3rem]">
+                {formatTime(settings.preferences.timerDefault)}
+              </span>
+            </div>
+          </div>
+
+          {/* Auto Advance Difficulty */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center">
+              <div className="w-5 h-5 text-red-600 mr-3 text-center">🔥</div>
+              <div>
+                <h3 className="font-medium text-gray-800">Auto-Advance Difficulty</h3>
+                <p className="text-sm text-gray-600">Automatically increase difficulty as you progress</p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.preferences.autoAdvanceDifficulty}
+                onChange={(e) => updatePreference('autoAdvanceDifficulty', e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Game Options */}
+      <div className="card mb-6">
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <div className="w-5 h-5 text-blue-600 mr-2">🎮</div>
+          Game Options
+        </h2>
+        
+        <div className="space-y-4">
+          {/* Show Progress */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center">
+              <div className="w-5 h-5 text-green-600 mr-3 text-center">📊</div>
+              <div>
+                <h3 className="font-medium text-gray-800">Show Progress Bars</h3>
+                <p className="text-sm text-gray-600">Display progress and level information</p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.gameOptions.showProgress}
+                onChange={(e) => updateGameOption('showProgress', e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+            </label>
+          </div>
+
+          {/* Enable Custom Cards */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center">
+              <div className="w-5 h-5 text-purple-600 mr-3 text-center">✨</div>
+              <div>
+                <h3 className="font-medium text-gray-800">Enable Custom Cards</h3>
+                <p className="text-sm text-gray-600">Allow adding and using custom dares and actions</p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.gameOptions.enableCustomCards}
+                onChange={(e) => updateGameOption('enableCustomCards', e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+            </label>
+          </div>
+
+          {/* Player Photos (Coming Soon) */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg opacity-75">
+            <div className="flex items-center">
+              <div className="w-5 h-5 text-pink-600 mr-3 text-center">📸</div>
+              <div>
+                <h3 className="font-medium text-gray-800">Player Photos</h3>
+                <p className="text-sm text-gray-600">Add profile photos for players (Coming Soon)</p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-not-allowed">
+              <input
+                type="checkbox"
+                checked={settings.gameOptions.showPlayerPhotos}
+                onChange={(e) => updateGameOption('showPlayerPhotos', e.target.checked)}
+                className="sr-only peer"
+                disabled
+              />
+              <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex gap-4 justify-center">
+        <button
+          onClick={saveSettings}
+          className={`btn-primary flex items-center px-6 py-3 ${
+            unsavedChanges ? 'animate-pulse' : ''
+          }`}
+        >
+          <Save className="mr-2 w-4 h-4" />
+          {unsavedChanges ? 'Save Changes' : 'Settings Saved'}
+        </button>
+        
+        <button
+          onClick={resetSettings}
+          className="btn-secondary flex items-center px-6 py-3"
+        >
+          <RotateCcw className="mr-2 w-4 h-4" />
+          Reset to Defaults
+        </button>
+      </div>
+
+      {/* Info Section */}
+      <div className="mt-8 p-4 bg-purple-50 rounded-lg">
+        <h3 className="font-semibold text-purple-800 mb-2">Multiplayer Features:</h3>
+        <ul className="text-sm text-purple-700 space-y-1">
+          <li>• Support for 2-8 players</li>
+          <li>• Games automatically cycle through all players</li>
+          <li>• Each player gets their turn with personalized names</li>
+          <li>• Progress tracking works across all players</li>
+        </ul>
+        
+        <h3 className="font-semibold text-purple-800 mb-2 mt-4">Coming Soon Features:</h3>
+        <ul className="text-sm text-purple-700 space-y-1">
+          <li>• Player-specific statistics</li>
+          <li>• Team-based challenges</li>
+          <li>• Player elimination modes</li>
+          <li>• Custom player avatars</li>
+        </ul>
       </div>
     </div>
   )

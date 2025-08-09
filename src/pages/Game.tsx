@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Play, Trophy, Target, Flame, RotateCcw, X, Pause, Plus, Minus, PlusCircle } from 'lucide-react'
 import cardsData from '../data/cards.json'
+import { useSettings } from '../hooks/useSettings'
 
 interface GameCard {
   id: string
@@ -15,20 +16,31 @@ interface GameProgress {
 }
 
 const Game = () => {
+  const settings = useSettings()
   const [currentPlayer, setCurrentPlayer] = useState<string>('')
+  const [currentPlayerIndex, setCurrentPlayerIndex] = useState<number>(0)
   const [currentCard, setCurrentCard] = useState<GameCard | null>(null)
 
   const [isGameActive, setIsGameActive] = useState(false)
-  const [players] = useState<string[]>(['You', 'Your Wife'])
+  const [players, setPlayers] = useState<string[]>(settings.players.names)
+
+  // Update players when settings change
+  useEffect(() => {
+    setPlayers(settings.players.names)
+    // Reset current player index if it's out of bounds
+    if (currentPlayerIndex >= settings.players.names.length) {
+      setCurrentPlayerIndex(0)
+    }
+  }, [settings.players.names, currentPlayerIndex])
   const [dareCards, setDareCards] = useState<GameCard[]>(() => {
     const defaultCards = cardsData.dareCards as GameCard[]
     const saved = localStorage.getItem('customCards')
     const customCards = saved ? JSON.parse(saved) : []
     return [...defaultCards, ...customCards]
   })
-  const [timeLeft, setTimeLeft] = useState<number>(90) // 1.5 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState<number>(settings.preferences.timerDefault)
   const [timerActive, setTimerActive] = useState<boolean>(false)
-  const [defaultTimerDuration, setDefaultTimerDuration] = useState<number>(90) // Remember user's preferred duration
+  const [defaultTimerDuration, setDefaultTimerDuration] = useState<number>(settings.preferences.timerDefault)
   const [showAddCardModal, setShowAddCardModal] = useState<boolean>(false)
   const [customCards, setCustomCards] = useState<GameCard[]>(() => {
     const saved = localStorage.getItem('customCards')
@@ -36,6 +48,14 @@ const Game = () => {
   })
   const [newCardContent, setNewCardContent] = useState<string>('')
   const [newCardDifficulty, setNewCardDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy')
+  
+  // Track used cards to prevent duplicates
+  const [usedCardIds, setUsedCardIds] = useState<Set<string>>(new Set())
+  const [availableCardsCount, setAvailableCardsCount] = useState<{[key: string]: number}>({
+    easy: 0,
+    medium: 0,
+    hard: 0
+  })
   
   // Unified progress system
   const [gameProgress, setGameProgress] = useState<GameProgress>(() => {
@@ -74,13 +94,30 @@ const Game = () => {
     localStorage.setItem('gameProgress', JSON.stringify(gameProgress))
   }, [gameProgress])
 
-  // Save custom cards to localStorage
+  // Save custom cards to localStorage and update available counts
   useEffect(() => {
     localStorage.setItem('customCards', JSON.stringify(customCards))
     // Update dareCards when customCards changes
     const defaultCards = cardsData.dareCards as GameCard[]
-    setDareCards([...defaultCards, ...customCards])
+    const allCards = [...defaultCards, ...customCards]
+    setDareCards(allCards)
+    
+    // Update available cards count
+    const counts = { easy: 0, medium: 0, hard: 0 }
+    allCards.forEach(card => {
+      counts[card.difficulty]++
+    })
+    setAvailableCardsCount(counts)
   }, [customCards])
+
+  // Update available counts when dareCards change
+  useEffect(() => {
+    const counts = { easy: 0, medium: 0, hard: 0 }
+    dareCards.forEach(card => {
+      counts[card.difficulty]++
+    })
+    setAvailableCardsCount(counts)
+  }, [dareCards])
 
   // Timer effect
   useEffect(() => {
@@ -108,6 +145,13 @@ const Game = () => {
   }, [timerActive, timeLeft])
 
   const playNaughtySound = () => {
+    // Only play sound if enabled in settings
+    if (!settings.preferences.soundEnabled) {
+      // Fallback: show alert if sound is disabled
+      alert('⏰ Time\'s up! Better get moving... 😈')
+      return
+    }
+    
     // Create audio context for naughty sound effect
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
@@ -195,17 +239,38 @@ const Game = () => {
     setCustomCards(prev => prev.filter(card => card.id !== cardId))
   }
 
-  const getRandomPlayer = () => {
-    return players[Math.floor(Math.random() * players.length)]
+  const getNextPlayer = () => {
+    const nextIndex = (currentPlayerIndex + 1) % players.length
+    setCurrentPlayerIndex(nextIndex)
+    return players[nextIndex]
   }
 
+
+
   const getAvailableCards = () => {
-    return dareCards.filter(card => card.difficulty === gameProgress.currentDifficulty)
+    const cardsForDifficulty = dareCards.filter(card => card.difficulty === gameProgress.currentDifficulty)
+    const unusedCards = cardsForDifficulty.filter(card => !usedCardIds.has(card.id))
+    
+    // If no unused cards available, reset the used cards for this difficulty and use all cards again
+    if (unusedCards.length === 0 && cardsForDifficulty.length > 0) {
+      console.log(`All ${gameProgress.currentDifficulty} cards used! Resetting available cards...`)
+      // Reset only the used cards for the current difficulty
+      const usedCardsForOtherDifficulties = new Set<string>()
+      dareCards.forEach(card => {
+        if (card.difficulty !== gameProgress.currentDifficulty && usedCardIds.has(card.id)) {
+          usedCardsForOtherDifficulties.add(card.id)
+        }
+      })
+      setUsedCardIds(usedCardsForOtherDifficulties)
+      return cardsForDifficulty
+    }
+    
+    return unusedCards
   }
 
   const drawCard = () => {
-    const randomPlayer = getRandomPlayer()
-    setCurrentPlayer(randomPlayer)
+    const nextPlayer = getNextPlayer()
+    setCurrentPlayer(nextPlayer)
     
     const availableCards = getAvailableCards()
     
@@ -216,6 +281,10 @@ const Game = () => {
 
     const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)]
     setCurrentCard(randomCard)
+    
+    // Mark this card as used
+    setUsedCardIds(prev => new Set([...prev, randomCard.id]))
+    
     // Reset timer to user's preferred duration for new card
     setTimeLeft(defaultTimerDuration)
     setTimerActive(false) // Don't auto-start timer - let user control it
@@ -223,6 +292,8 @@ const Game = () => {
 
   const startGame = () => {
     setIsGameActive(true)
+    setCurrentPlayerIndex(0) // Start with first player
+    setCurrentPlayer(players[0])
     drawCard()
   }
 
@@ -230,7 +301,15 @@ const Game = () => {
     setIsGameActive(false)
     setCurrentCard(null)
     setCurrentPlayer('')
+    setCurrentPlayerIndex(0) // Reset to first player
     stopTimer() // Stop timer when game stops
+  }
+
+  const resetUsedCards = () => {
+    if (confirm('Reset used cards? This will allow all cards to appear again in the current session.')) {
+      setUsedCardIds(new Set())
+      alert('All cards are now available again!')
+    }
   }
 
   const completeCard = () => {
@@ -459,133 +538,156 @@ const Game = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="text-center mb-4">
-        <h1 className="text-3xl font-bold text-purple-800 mb-1">Dare no truth</h1>
-        <p className="text-gray-600">Complete dares to advance through the levels!</p>
+      <div className="text-center mb-3">
+        <h1 className="text-2xl font-bold text-purple-800 mb-1">Dare Game</h1>
+        <p className="text-sm text-gray-600">Complete dares to advance through the levels!</p>
+      </div>
+
+      {/* Players Display */}
+      <div className="card mb-3 py-3">
+        <div className="flex flex-wrap justify-center gap-2 mb-2">
+          {players.map((player, index) => (
+            <div
+              key={index}
+              className={`px-2 py-1 rounded-full text-xs font-medium transition-all ${
+                index === currentPlayerIndex
+                  ? 'bg-purple-600 text-white shadow-lg scale-105'
+                  : isGameActive
+                    ? 'bg-gray-200 text-gray-600'
+                    : 'bg-purple-100 text-purple-700'
+              }`}
+            >
+              {player}
+              {index === currentPlayerIndex && isGameActive && (
+                <span className="ml-1">👑</span>
+              )}
+            </div>
+          ))}
+        </div>
+        {isGameActive && (
+          <p className="text-center text-xs text-gray-600">
+            <strong>{currentPlayer}'s</strong> turn
+          </p>
+        )}
       </div>
 
       {/* Unified Progress Bar */}
-      <div className="card mb-4">
-        <h2 className="text-lg font-semibold mb-4 flex items-center justify-center">
+      <div className="card mb-3 py-3">
+        <div className="flex items-center justify-center mb-2">
           {getLevelIcon(gameProgress.currentDifficulty)}
-          <span className={`ml-2 ${getLevelColor(gameProgress.currentDifficulty)}`}>
+          <span className={`ml-1 text-sm font-semibold ${getLevelColor(gameProgress.currentDifficulty)}`}>
             {getLevelName(gameProgress.currentDifficulty)} Level
           </span>
-        </h2>
-        
-        <div className="relative">
-          {/* Progress Bar */}
-          <div className="w-full bg-gray-200 rounded-full h-4 mb-4">
-            <div 
-              className={`h-4 rounded-full transition-all duration-500 ${
-                gameProgress.currentDifficulty === 'easy' ? 'bg-green-600' :
-                gameProgress.currentDifficulty === 'medium' ? 'bg-yellow-600' : 'bg-red-600'
-              }`}
-              style={{ width: `${progressPercentage}%` }}
-            ></div>
-          </div>
-          
-
         </div>
         
-
+        <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+          <div 
+            className={`h-3 rounded-full transition-all duration-500 ${
+              gameProgress.currentDifficulty === 'easy' ? 'bg-green-600' :
+              gameProgress.currentDifficulty === 'medium' ? 'bg-yellow-600' : 'bg-red-600'
+            }`}
+            style={{ width: `${progressPercentage}%` }}
+          ></div>
+        </div>
+        
+        
       </div>
 
       {/* Game Controls */}
-      <div className="card mb-4">
+      <div className="card mb-3 py-3">
         <div className="text-center">
           {!isGameActive ? (
             <>
               <button
                 onClick={startGame}
-                className="btn-primary text-lg px-8 py-4 flex items-center mx-auto"
+                className="btn-primary text-base px-6 py-3 flex items-center mx-auto mb-3"
               >
-                <Play className="mr-2" />
+                <Play className="mr-2 w-4 h-4" />
                 Start Dare Challenge
               </button>
               
-              <div className="mt-4 text-center">
-                <div className="flex gap-3 justify-center mb-2">
-                  <button
-                    onClick={coolDown}
-                    disabled={gameProgress.currentDifficulty === 'easy'}
-                    className={`px-4 py-2 font-semibold rounded-lg transition-colors text-white ${
-                      gameProgress.currentDifficulty === 'easy'
-                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                        : 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600'
-                    }`}
-                    title={getCoolDownText()}
-                  >
-                    {getCoolDownButtonText()}
-                  </button>
-                  
-                  <button
-                    onClick={heatUp}
-                    disabled={gameProgress.currentDifficulty === 'hard'}
-                    className={`px-4 py-2 font-semibold rounded-lg transition-colors text-white ${
-                      gameProgress.currentDifficulty === 'hard'
-                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                        : 'bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600'
-                    }`}
-                    title={getHeatUpText()}
-                  >
-                    {getHeatUpButtonText()}
-                  </button>
-                </div>
-              </div>
-              
-              <div className="mt-4 flex gap-3 justify-center">
+              <div className="flex gap-2 justify-center mb-2">
                 <button
-                  onClick={() => setShowAddCardModal(true)}
-                  className="btn-primary bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                  onClick={coolDown}
+                  disabled={gameProgress.currentDifficulty === 'easy'}
+                  className={`px-3 py-2 text-sm font-medium rounded transition-colors text-white ${
+                    gameProgress.currentDifficulty === 'easy'
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600'
+                  }`}
                 >
-                  <PlusCircle className="mr-2 w-4 h-4" />
-                  Add Custom Dare
+                  ❄️ Cool
                 </button>
                 
                 <button
-                  onClick={resetProgress}
-                  className="btn-secondary"
+                  onClick={heatUp}
+                  disabled={gameProgress.currentDifficulty === 'hard'}
+                  className={`px-3 py-2 text-sm font-medium rounded transition-colors text-white ${
+                    gameProgress.currentDifficulty === 'hard'
+                      ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                      : 'bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600'
+                  }`}
                 >
-                  <RotateCcw className="mr-2 w-4 h-4" />
+                  🔥 Heat
+                </button>
+                
+                <button
+                  onClick={() => setShowAddCardModal(true)}
+                  className="px-3 py-2 text-sm font-medium rounded bg-green-500 hover:bg-green-600 text-white"
+                >
+                  <PlusCircle className="w-4 h-4 inline mr-1" />
+                  Add
+                </button>
+              </div>
+              
+              <div className="flex gap-2 justify-center">
+                <button
+                  onClick={resetProgress}
+                  className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 rounded"
+                >
                   Reset Progress
+                </button>
+                
+                <button
+                  onClick={resetUsedCards}
+                  className="px-3 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-700 rounded"
+                >
+                  Reset Used
                 </button>
               </div>
             </>
           ) : (
-            <div className="flex gap-3 justify-center items-center">
+            <div className="flex gap-2 justify-center items-center">
               <button
                 onClick={stopGame}
-                className="text-lg px-6 py-4 flex items-center font-semibold rounded-lg transition-colors bg-red-100 hover:bg-red-200 text-red-700"
+                className="px-6 py-2 text-sm font-medium rounded bg-red-100 hover:bg-red-200 text-red-700 flex items-center"
               >
-                <X className="mr-2" />
+                <X className="mr-1 w-4 h-4" />
                 Stop Game
               </button>
               
               <button
                 onClick={coolDown}
                 disabled={gameProgress.currentDifficulty === 'easy'}
-                className={`text-lg px-6 py-4 flex items-center font-semibold rounded-lg transition-colors text-white ${
+                className={`px-3 py-2 text-sm font-medium rounded text-white ${
                   gameProgress.currentDifficulty === 'easy'
                     ? 'bg-gray-400 cursor-not-allowed opacity-50'
                     : 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600'
                 }`}
-                title={getCoolDownText()}
               >
-                {getCoolDownButtonText()}
+                ❄️ Cool
               </button>
               
               <button
                 onClick={heatUp}
                 disabled={gameProgress.currentDifficulty === 'hard'}
-                className={`text-lg px-6 py-4 flex items-center font-semibold rounded-lg transition-colors text-white ${
+                className={`px-3 py-2 text-sm font-medium rounded text-white ${
                   gameProgress.currentDifficulty === 'hard'
                     ? 'bg-gray-400 cursor-not-allowed opacity-50'
                     : 'bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600'
                 }`}
-                title={getHeatUpText()}
               >
-                {getHeatUpButtonText()}
+                🔥 Heat
               </button>
             </div>
           )}
@@ -594,119 +696,94 @@ const Game = () => {
 
       {/* Current Card Display */}
       {currentCard && (
-        <div className="card mb-4">
+        <div className="card py-4">
           <div className="text-center">
-            <div className="mb-4">
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getDifficultyColor(gameProgress.currentDifficulty)}`}>
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <span className="text-3xl text-red-500">⚡</span>
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">DARE</h2>
+                <p className="text-xs text-gray-600">
+                  <span className="font-semibold text-purple-600">{currentPlayer}</span>
+                </p>
+              </div>
+              <span className={`px-2 py-1 rounded text-xs font-medium ${getDifficultyColor(gameProgress.currentDifficulty)}`}>
                 {gameProgress.currentDifficulty.toUpperCase()}
               </span>
             </div>
-            
-            <div className="mb-4">
-              <div className="text-5xl mb-2 text-red-500">
-                ⚡
-              </div>
-              <h2 className="text-xl font-bold text-gray-800 mb-1">
-                DARE
-              </h2>
-              <p className="text-base text-gray-600">
-                Player: <span className="font-semibold text-purple-600">{currentPlayer}</span>
-              </p>
-            </div>
 
-            <div className="space-y-4">
-              {/* Timer Controls */}
-              <div className="text-center mb-4">
-                <div className={`inline-flex items-center px-4 py-2 rounded-full font-bold text-lg mb-3 ${
-                  timeLeft <= 30 
-                    ? 'bg-red-100 text-red-700 animate-pulse' 
-                    : timeLeft <= 60 
-                      ? 'bg-yellow-100 text-yellow-700' 
-                      : 'bg-green-100 text-green-700'
-                }`}>
-                  ⏰ {formatTime(timeLeft)}
-                </div>
-                
-                {/* Timer Control Buttons */}
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <button
-                    onClick={() => adjustTime(-30)}
-                    disabled={timeLeft <= 30}
-                    className={`p-2 rounded-full ${
-                      timeLeft <= 30 
-                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
-                        : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
-                    }`}
-                    title="Subtract 30 seconds"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  
-                  <button
-                    onClick={timerActive ? pauseTimer : startTimer}
-                    className={`px-4 py-2 rounded-lg font-semibold text-white ${
-                      timerActive 
-                        ? 'bg-orange-500 hover:bg-orange-600' 
-                        : 'bg-green-500 hover:bg-green-600'
-                    }`}
-                  >
-                    {timerActive ? (
-                      <>
-                        <Pause className="w-4 h-4 mr-1 inline" />
-                        Pause
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 mr-1 inline" />
-                        Start
-                      </>
-                    )}
-                  </button>
-                  
-                  <button
-                    onClick={() => adjustTime(30)}
-                    disabled={timeLeft >= 150}
-                    className={`p-2 rounded-full ${
-                      timeLeft >= 150 
-                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
-                        : 'bg-red-100 hover:bg-red-200 text-red-700'
-                    }`}
-                    title="Add 30 seconds"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-                
-                {timeLeft <= 30 && timerActive && (
-                  <p className="text-sm text-red-600 mt-1 animate-bounce">
-                    Hurry up! Time's running out... 😈
-                  </p>
-                )}
-                
-                <p className="text-xs text-gray-500 mt-1">
-                  Range: 0:30 - 2:30 | Adjust: ±30sec
-                </p>
-              </div>
-
-              <div className="bg-gray-50 rounded-lg p-4 mb-3">
-                <p className="text-lg text-gray-800">{currentCard.content}</p>
+            {/* Timer */}
+            <div className="mb-3">
+              <div className={`inline-flex items-center px-3 py-1 rounded-full font-bold text-base mb-2 ${
+                timeLeft <= 30 
+                  ? 'bg-red-100 text-red-700 animate-pulse' 
+                  : timeLeft <= 60 
+                    ? 'bg-yellow-100 text-yellow-700' 
+                    : 'bg-green-100 text-green-700'
+              }`}>
+                ⏰ {formatTime(timeLeft)}
               </div>
               
-              <div className="flex gap-4 justify-center">
+              <div className="flex items-center justify-center gap-1 mb-1">
                 <button
-                  onClick={completeCard}
-                  className="btn-primary flex items-center px-6 py-3"
+                  onClick={() => adjustTime(-30)}
+                  disabled={timeLeft <= 30}
+                  className={`p-1 rounded ${
+                    timeLeft <= 30 
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                      : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                  }`}
                 >
-                  ✅ Completed (+2 points)
+                  <Minus className="w-3 h-3" />
                 </button>
+                
                 <button
-                  onClick={skipCard}
-                  className="btn-secondary flex items-center px-6 py-3 bg-red-100 hover:bg-red-200 text-red-700"
+                  onClick={timerActive ? pauseTimer : startTimer}
+                  className={`px-3 py-1 rounded text-sm font-medium text-white ${
+                    timerActive 
+                      ? 'bg-orange-500 hover:bg-orange-600' 
+                      : 'bg-green-500 hover:bg-green-600'
+                  }`}
                 >
-                  <X className="mr-2 w-4 h-4" />
-                  Skip (-1 point)
+                  {timerActive ? 'Pause' : 'Start'}
+                </button>
+                
+                <button
+                  onClick={() => adjustTime(30)}
+                  disabled={timeLeft >= 150}
+                  className={`p-1 rounded ${
+                    timeLeft >= 150 
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                      : 'bg-red-100 hover:bg-red-200 text-red-700'
+                  }`}
+                >
+                  <Plus className="w-3 h-3" />
                 </button>
               </div>
+              
+              {timeLeft <= 30 && timerActive && (
+                <p className="text-xs text-red-600 animate-bounce">
+                  Hurry up! Time's running out... 😈
+                </p>
+              )}
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-3 mb-3">
+              <p className="text-base text-gray-800">{currentCard.content}</p>
+            </div>
+            
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={completeCard}
+                className="px-4 py-2 text-sm font-medium rounded bg-green-500 hover:bg-green-600 text-white"
+              >
+                ✅ Done (+2)
+              </button>
+              <button
+                onClick={skipCard}
+                className="px-4 py-2 text-sm font-medium rounded bg-red-100 hover:bg-red-200 text-red-700"
+              >
+                Skip (-1)
+              </button>
             </div>
           </div>
         </div>
