@@ -19,13 +19,7 @@ const Navbar = ({ sidebarOpen, setSidebarOpen }: NavbarProps) => {
             </button>
             <div className="flex items-center">
               <Heart className="h-8 w-8 text-purple-600 mr-3" />
-              <h1 className="text-xl font-semibold text-gray-900">Progressive Dare Challenge</h1>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            <div className="text-sm text-gray-500">
-              For you and your wife ❤️
+              <h1 className="text-xl font-semibold text-gray-900">No BS Adult Games</h1>
             </div>
           </div>
         </div>
