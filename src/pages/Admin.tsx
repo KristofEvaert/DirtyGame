@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
 import { Plus, Edit, Trash2, Save, X, Filter, Download, Upload } from 'lucide-react'
-import cardsData from '../data/cards.json'
-import diceData from '../data/dice.json'
 
 interface GameCard {
   id: string
@@ -33,11 +31,33 @@ const Admin = () => {
   const [filterType] = useState<'all' | 'dare' | 'dice'>('all')
   const [filterDifficulty, setFilterDifficulty] = useState<'all' | 'easy' | 'medium' | 'hard'>('all')
 
-  // Load cards and suggestions from JSON file on component mount
+  // Load cards and suggestions from JSON files dynamically on component mount
   useEffect(() => {
-    setDareCards(cardsData.dareCards as GameCard[])
-    setDiceActions(diceData.diceActions as GameCard[])
-    setSuggestions([...(cardsData.suggestions || []), ...(diceData.suggestions || [])] as Suggestion[])
+    const loadGameData = async () => {
+      try {
+        // Load cards data
+        const cardsResponse = await fetch('/src/data/cards.json')
+        const cardsData = await cardsResponse.json()
+        setDareCards(cardsData.dareCards as GameCard[])
+
+        // Load dice data  
+        const diceResponse = await fetch('/src/data/dice.json')
+        const diceData = await diceResponse.json()
+        // Note: dice.json now has actionDice/bodyDice structure, no longer diceActions
+        setDiceActions([])
+
+        // Combine suggestions from both files
+        setSuggestions([...(cardsData.suggestions || []), ...(diceData.suggestions || [])] as Suggestion[])
+      } catch (error) {
+        console.error('Failed to load game data:', error)
+        // Fallback to empty arrays if loading fails
+        setDareCards([])
+        setDiceActions([])
+        setSuggestions([])
+      }
+    }
+
+    loadGameData()
   }, [])
 
   // Export cards to JSON files
@@ -66,7 +86,7 @@ const Admin = () => {
     document.body.removeChild(diceLink)
     URL.revokeObjectURL(diceUrl)
 
-    alert('Exported cards.json and dice.json successfully!')
+    console.log('Exported cards.json and dice.json successfully!')
   }
 
   // Import cards from JSON file
@@ -81,12 +101,12 @@ const Admin = () => {
             if (data.dareCards) setDareCards(data.dareCards as GameCard[])
             if (data.diceActions) setDiceActions(data.diceActions as GameCard[])
             if (data.suggestions) setSuggestions(data.suggestions as Suggestion[])
-            alert('Data imported successfully!')
+            console.log('Data imported successfully!')
           } else {
-            alert('Invalid file format. Please select a valid game data JSON file.')
+            console.log('Invalid file format. Please select a valid game data JSON file.')
           }
         } catch (error) {
-          alert('Error reading file. Please make sure it\'s a valid JSON file.')
+          console.log('Error reading file. Please make sure it\'s a valid JSON file.')
         }
       }
       reader.readAsText(file)
@@ -95,7 +115,6 @@ const Admin = () => {
 
   const addCard = () => {
     if (!newCard.content?.trim()) {
-      alert('Please enter card content')
       return
     }
 
@@ -121,7 +140,6 @@ const Admin = () => {
 
   const updateCard = () => {
     if (!editingCard || !editingCard.content?.trim()) {
-      alert('Please enter card content')
       return
     }
 
@@ -555,9 +573,20 @@ const Admin = () => {
         <button
           onClick={() => {
             if (confirm('Reset to default data? This will remove all custom content.')) {
-              setDareCards(cardsData.dareCards as GameCard[])
-              setDiceActions(diceData.diceActions as GameCard[])
-              setSuggestions([])
+              // Reload data from JSON files
+              const loadGameData = async () => {
+                try {
+                  const cardsResponse = await fetch('/src/data/cards.json')
+                  const cardsData = await cardsResponse.json()
+                  setDareCards(cardsData.dareCards as GameCard[])
+                  // Note: dice.json now has actionDice/bodyDice structure, no longer diceActions
+                  setDiceActions([])
+                  setSuggestions([])
+                } catch (error) {
+                  console.error('Failed to reload game data:', error)
+                }
+              }
+              loadGameData()
             }
           }}
           className="btn-secondary"

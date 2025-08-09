@@ -14,24 +14,9 @@ interface DiceGameProgress {
   currentLevel: 1 | 2 | 3
 }
 
-// Game data - completely independent from dare game
-const ACTIONS = {
-  1: ['Kiss', 'Touch', 'Massage', 'Caress', 'Whisper to', 'Look into the eyes of'],
-  2: ['Lick', 'Bite gently', 'Nibble', 'Blow on', 'Tickle', 'Trace with finger'],
-  3: ['Suck', 'Squeeze', 'Pinch lightly', 'Rub', 'Stroke', 'Press against'],
-  4: ['Slap playfully', 'Grab', 'Pull gently', 'Twist', 'Flick', 'Tap'],
-  5: ['Worship', 'Devour', 'Tease', 'Explore', 'Dominate', 'Submit to'],
-  6: ['Go wild with', 'Be creative with', 'Surprise with', 'Seduce with', 'Play with', 'Own']
-}
-
-const BODY_REGIONS = {
-  1: ['lips', 'neck', 'ears', 'cheeks', 'forehead', 'chin'],
-  2: ['shoulders', 'arms', 'hands', 'fingers', 'wrists', 'back'],
-  3: ['chest', 'stomach', 'waist', 'hips', 'sides', 'lower back'],
-  4: ['thighs', 'knees', 'calves', 'ankles', 'feet', 'legs'],
-  5: ['inner thighs', 'behind', 'lower stomach', 'hip bones', 'spine', 'sensitive spots'],
-  6: ['anywhere you want', 'your choice', 'most sensitive area', 'favorite spot', 'secret place', 'surprise location']
-}
+// Get actions and body regions from JSON data based on current level
+// These will be populated dynamically when dice data loads
+let diceData: any = null
 
 // Level requirements (points needed to advance)
 const LEVEL_REQUIREMENTS = {
@@ -50,9 +35,54 @@ const Dice = () => {
   const [players, setPlayers] = useState<string[]>(settings.players.names)
   const [currentAction, setCurrentAction] = useState<string>('')
   const [currentBodyRegion, setCurrentBodyRegion] = useState<string>('')
+  const [diceDataLoaded, setDiceDataLoaded] = useState<boolean>(false)
+  const [loadedDiceData, setLoadedDiceData] = useState<any>(null)
   
   // Track used dice combinations to prevent duplicates
   const [usedCombinations, setUsedCombinations] = useState<Set<string>>(new Set())
+
+  // Helper functions that use the loaded dice data
+  const getActionsForLevel = (level: 1 | 2 | 3): string[] => {
+    if (!loadedDiceData) return []
+    switch (level) {
+      case 1: return loadedDiceData.actionDice.level1 || []
+      case 2: return loadedDiceData.actionDice.level2 || []
+      case 3: return loadedDiceData.actionDice.level3 || []
+      default: return loadedDiceData.actionDice.level1 || []
+    }
+  }
+
+  const getBodyRegionsForLevel = (level: 1 | 2 | 3): string[] => {
+    if (!loadedDiceData) return []
+    switch (level) {
+      case 1: return loadedDiceData.bodyDice.level1 || []
+      case 2: return loadedDiceData.bodyDice.level2 || []
+      case 3: return loadedDiceData.bodyDice.level3 || []
+      default: return loadedDiceData.bodyDice.level1 || []
+    }
+  }
+
+  // Load dice data dynamically on component mount
+  useEffect(() => {
+    const loadDiceData = async () => {
+      try {
+        const response = await fetch('/src/data/dice.json')
+        const data = await response.json()
+        setLoadedDiceData(data)
+        setDiceDataLoaded(true)
+      } catch (error) {
+        console.error('Failed to load dice data:', error)
+        // Fallback to empty structure if loading fails
+        setLoadedDiceData({
+          actionDice: { level1: [], level2: [], level3: [] },
+          bodyDice: { level1: [], level2: [], level3: [] }
+        })
+        setDiceDataLoaded(true)
+      }
+    }
+
+    loadDiceData()
+  }, [])
 
   // Update players when settings change
   useEffect(() => {
@@ -84,8 +114,10 @@ const Dice = () => {
     localStorage.setItem('diceGameProgress', JSON.stringify(gameProgress))
   }, [gameProgress])
 
-  // Update level based on points (only auto-advance, don't auto-demote)
+  // Update level based on points (only auto-advance, don't auto-demote) - only if enabled
   useEffect(() => {
+    if (!settings.preferences.autoAdvanceDifficulty) return
+    
     let newLevel: 1 | 2 | 3 = 1
     if (gameProgress.totalPoints >= LEVEL_REQUIREMENTS[3].min) {
       newLevel = 3
@@ -97,7 +129,7 @@ const Dice = () => {
     if (newLevel > gameProgress.currentLevel) {
       setGameProgress(prev => ({ ...prev, currentLevel: newLevel }))
     }
-  }, [gameProgress.totalPoints])
+  }, [gameProgress.totalPoints, settings.preferences.autoAdvanceDifficulty])
 
   const getDiceIcon = (value: number, size: string = "w-16 h-16", accentColor: string = "bg-red-500") => {
     const sizeClasses = size.includes('12') ? 'w-12 h-12' : 'w-16 h-16'
@@ -234,17 +266,19 @@ const Dice = () => {
   }
 
   const getRandomAction = (diceValue: number): string => {
-    const actions = ACTIONS[diceValue as keyof typeof ACTIONS]
-    return actions[Math.floor(Math.random() * actions.length)]
+    const actions = getActionsForLevel(gameProgress.currentLevel)
+    const actionIndex = (diceValue - 1) % actions.length
+    return actions[actionIndex]
   }
 
   const getRandomBodyRegion = (diceValue: number): string => {
-    const regions = BODY_REGIONS[diceValue as keyof typeof BODY_REGIONS]
-    return regions[Math.floor(Math.random() * regions.length)]
+    const regions = getBodyRegionsForLevel(gameProgress.currentLevel)
+    const regionIndex = (diceValue - 1) % regions.length
+    return regions[regionIndex]
   }
 
   const rollDice = async () => {
-    if (isRolling) return
+    if (isRolling || !diceDataLoaded) return
 
     setIsRolling(true)
     const nextPlayer = getNextPlayer()
@@ -414,6 +448,14 @@ const Dice = () => {
       const newPoints = LEVEL_REQUIREMENTS[newLevel].min
       return { ...prev, currentLevel: newLevel, totalPoints: newPoints }
     })
+    
+    // If game is active, roll new dice with the new level
+    if (isGameActive) {
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        rollDice()
+      }, 100)
+    }
   }
 
   const coolDown = () => {
@@ -426,6 +468,14 @@ const Dice = () => {
       const newPoints = LEVEL_REQUIREMENTS[newLevel].min
       return { ...prev, currentLevel: newLevel, totalPoints: newPoints }
     })
+    
+    // If game is active, roll new dice with the new level
+    if (isGameActive) {
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        rollDice()
+      }, 100)
+    }
   }
 
   const getLevelIcon = (level: 1 | 2 | 3): React.ReactElement => {
@@ -489,6 +539,18 @@ const Dice = () => {
 
   const levelProgress = getCurrentLevelProgress()
 
+  if (!diceDataLoaded) {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-12">
+        <div className="bg-white rounded-lg shadow-lg p-8 border border-gray-200">
+          <div className="text-6xl mb-4">🎲</div>
+          <h2 className="text-2xl font-bold text-purple-800 mb-2">Loading Dice Data...</h2>
+          <p className="text-gray-600">Please wait while we load the latest dice content.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="text-center mb-2">
@@ -500,28 +562,29 @@ const Dice = () => {
 
 
 
-      {/* Level Progress */}
-      <div className="card mb-3 py-3">
-        <h2 className="text-base font-semibold mb-2 flex items-center justify-center">
-          {getLevelIcon(gameProgress.currentLevel)}
-          <span className={`ml-2 ${getLevelColor(gameProgress.currentLevel)}`}>
-            Level {gameProgress.currentLevel}: {getLevelName(gameProgress.currentLevel)}
-          </span>
-        </h2>
-        
-        <div className="relative">
-          <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
-            <div 
-              className={`h-3 rounded-full transition-all duration-500 ${
-                gameProgress.currentLevel === 1 ? 'bg-green-600' :
-                gameProgress.currentLevel === 2 ? 'bg-yellow-600' : 'bg-red-600'
-              }`}
-              style={{ width: `${levelProgress.percentage}%` }}
-            ></div>
+      {/* Level Progress - Only show if enabled */}
+      {settings.gameOptions.showProgress && (
+        <div className="card mb-3 py-3">
+          <h2 className="text-base font-semibold mb-2 flex items-center justify-center">
+            {getLevelIcon(gameProgress.currentLevel)}
+            <span className={`ml-2 ${getLevelColor(gameProgress.currentLevel)}`}>
+              Level {gameProgress.currentLevel}: {getLevelName(gameProgress.currentLevel)}
+            </span>
+          </h2>
+          
+          <div className="relative">
+            <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+              <div 
+                className={`h-3 rounded-full transition-all duration-500 ${
+                  gameProgress.currentLevel === 1 ? 'bg-green-600' :
+                  gameProgress.currentLevel === 2 ? 'bg-yellow-600' : 'bg-red-600'
+                }`}
+                style={{ width: `${levelProgress.percentage}%` }}
+              ></div>
+            </div>
           </div>
-
         </div>
-      </div>
+      )}
 
       {/* Game Controls */}
       <div className="card mb-3 py-3">

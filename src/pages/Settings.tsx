@@ -1,5 +1,34 @@
 import React, { useState, useEffect } from 'react'
-import { Save, User, Users, Volume2, VolumeX, Palette, RotateCcw, Settings as SettingsIcon, Plus, Minus, Trash2 } from 'lucide-react'
+import { Save, User, Users, Volume2, VolumeX, Palette, RotateCcw, Settings as SettingsIcon, Plus, Minus, Trash2, Cookie } from 'lucide-react'
+
+// Cookie utility functions
+const setCookie = (name: string, value: string, days: number = 365) => {
+  const expires = new Date()
+  expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000)
+  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`
+}
+
+const getCookie = (name: string): string | null => {
+  const nameEQ = name + "="
+  const ca = document.cookie.split(';')
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i]
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length)
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length)
+  }
+  return null
+}
+
+const deleteCookie = (name: string) => {
+  document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+}
+
+const deleteAllGameCookies = () => {
+  deleteCookie('gameSettings')
+  deleteCookie('gameProgress')
+  deleteCookie('diceGameProgress')
+  deleteCookie('customCards')
+}
 
 interface GameSettings {
   players: {
@@ -8,20 +37,17 @@ interface GameSettings {
   }
   preferences: {
     soundEnabled: boolean
-    theme: 'default' | 'dark' | 'romantic'
     timerDefault: number
     autoAdvanceDifficulty: boolean
   }
   gameOptions: {
-    showPlayerPhotos: boolean
-    enableCustomCards: boolean
     showProgress: boolean
   }
 }
 
 const Settings = () => {
   const [settings, setSettings] = useState<GameSettings>(() => {
-    const saved = localStorage.getItem('gameSettings')
+    const saved = getCookie('gameSettings')
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
@@ -32,20 +58,31 @@ const Settings = () => {
               names: [parsed.playerNames.player1 || 'You', parsed.playerNames.player2 || 'Your Partner'],
               count: 2
             },
-            preferences: parsed.preferences || {
-              soundEnabled: true,
-              theme: 'default',
-              timerDefault: 90,
-              autoAdvanceDifficulty: true
+            preferences: {
+              soundEnabled: parsed.preferences?.soundEnabled ?? true,
+              timerDefault: parsed.preferences?.timerDefault ?? 90,
+              autoAdvanceDifficulty: parsed.preferences?.autoAdvanceDifficulty ?? true
             },
-            gameOptions: parsed.gameOptions || {
-              showPlayerPhotos: false,
-              enableCustomCards: true,
-              showProgress: true
+            gameOptions: {
+              showProgress: parsed.gameOptions?.showProgress ?? true
             }
           }
         }
-        return parsed
+        // Clean up old format fields
+        return {
+          players: parsed.players || {
+            names: ['You', 'Your Partner'],
+            count: 2
+          },
+          preferences: {
+            soundEnabled: parsed.preferences?.soundEnabled ?? true,
+            timerDefault: parsed.preferences?.timerDefault ?? 90,
+            autoAdvanceDifficulty: parsed.preferences?.autoAdvanceDifficulty ?? true
+          },
+          gameOptions: {
+            showProgress: parsed.gameOptions?.showProgress ?? true
+          }
+        }
       } catch (e) {
         console.log('Error parsing settings, using defaults:', e)
       }
@@ -57,13 +94,10 @@ const Settings = () => {
       },
       preferences: {
         soundEnabled: true,
-        theme: 'default' as const,
         timerDefault: 90,
         autoAdvanceDifficulty: true
       },
       gameOptions: {
-        showPlayerPhotos: false,
-        enableCustomCards: true,
         showProgress: true
       }
     }
@@ -71,9 +105,9 @@ const Settings = () => {
 
   const [unsavedChanges, setUnsavedChanges] = useState(false)
 
-  // Save settings to localStorage whenever they change
+  // Save settings to cookies whenever they change
   useEffect(() => {
-    localStorage.setItem('gameSettings', JSON.stringify(settings))
+    setCookie('gameSettings', JSON.stringify(settings))
     // Dispatch custom event to notify other components
     window.dispatchEvent(new CustomEvent('settingsChanged'))
   }, [settings])
@@ -147,7 +181,6 @@ const Settings = () => {
     // Settings are automatically saved to localStorage via useEffect
     // This could be extended to save to a server in the future
     setUnsavedChanges(false)
-    alert('Settings saved successfully!')
   }
 
   const resetSettings = () => {
@@ -159,19 +192,39 @@ const Settings = () => {
         },
         preferences: {
           soundEnabled: true,
-          theme: 'default',
           timerDefault: 90,
           autoAdvanceDifficulty: true
         },
         gameOptions: {
-          showPlayerPhotos: false,
-          enableCustomCards: true,
           showProgress: true
         }
       }
       setSettings(defaultSettings)
       setUnsavedChanges(false)
-      alert('Settings reset to defaults!')
+    }
+  }
+
+  const clearAllCookies = () => {
+    if (confirm('Are you sure you want to delete all game data? This will reset everything including progress, custom cards, and settings. This cannot be undone.')) {
+      deleteAllGameCookies()
+      // Reset to default settings
+      const defaultSettings: GameSettings = {
+        players: {
+          names: ['You', 'Your Partner'],
+          count: 2
+        },
+        preferences: {
+          soundEnabled: true,
+          timerDefault: 90,
+          autoAdvanceDifficulty: true
+        },
+        gameOptions: {
+          showProgress: true
+        }
+      }
+      setSettings(defaultSettings)
+      setUnsavedChanges(false)
+      setTimeout(() => window.location.reload(), 1000)
     }
   }
 
@@ -284,25 +337,7 @@ const Settings = () => {
             </label>
           </div>
 
-          {/* Theme Settings */}
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-            <div className="flex items-center">
-              <Palette className="w-5 h-5 text-purple-600 mr-3" />
-              <div>
-                <h3 className="font-medium text-gray-800">Theme</h3>
-                <p className="text-sm text-gray-600">Choose your preferred color theme</p>
-              </div>
-            </div>
-            <select
-              value={settings.preferences.theme}
-              onChange={(e) => updatePreference('theme', e.target.value as 'default' | 'dark' | 'romantic')}
-              className="input-field w-auto"
-            >
-              <option value="default">Default Purple</option>
-              <option value="dark">Dark Mode (Coming Soon)</option>
-              <option value="romantic">Romantic Pink (Coming Soon)</option>
-            </select>
-          </div>
+
 
           {/* Timer Default */}
           <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -379,51 +414,14 @@ const Settings = () => {
             </label>
           </div>
 
-          {/* Enable Custom Cards */}
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-            <div className="flex items-center">
-              <div className="w-5 h-5 text-purple-600 mr-3 text-center">✨</div>
-              <div>
-                <h3 className="font-medium text-gray-800">Enable Custom Cards</h3>
-                <p className="text-sm text-gray-600">Allow adding and using custom dares and actions</p>
-              </div>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.gameOptions.enableCustomCards}
-                onChange={(e) => updateGameOption('enableCustomCards', e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-            </label>
-          </div>
 
-          {/* Player Photos (Coming Soon) */}
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg opacity-75">
-            <div className="flex items-center">
-              <div className="w-5 h-5 text-pink-600 mr-3 text-center">📸</div>
-              <div>
-                <h3 className="font-medium text-gray-800">Player Photos</h3>
-                <p className="text-sm text-gray-600">Add profile photos for players (Coming Soon)</p>
-              </div>
-            </div>
-            <label className="relative inline-flex items-center cursor-not-allowed">
-              <input
-                type="checkbox"
-                checked={settings.gameOptions.showPlayerPhotos}
-                onChange={(e) => updateGameOption('showPlayerPhotos', e.target.checked)}
-                className="sr-only peer"
-                disabled
-              />
-              <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-            </label>
-          </div>
+
+
         </div>
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-4 justify-center">
+      <div className="flex gap-4 justify-center flex-wrap">
         <button
           onClick={saveSettings}
           className={`btn-primary flex items-center px-6 py-3 ${
@@ -441,6 +439,14 @@ const Settings = () => {
           <RotateCcw className="mr-2 w-4 h-4" />
           Reset to Defaults
         </button>
+
+        <button
+          onClick={clearAllCookies}
+          className="flex items-center px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors"
+        >
+          <Cookie className="mr-2 w-4 h-4" />
+          Clear All Data
+        </button>
       </div>
 
       {/* Info Section */}
@@ -453,13 +459,7 @@ const Settings = () => {
           <li>• Progress tracking works across all players</li>
         </ul>
         
-        <h3 className="font-semibold text-purple-800 mb-2 mt-4">Coming Soon Features:</h3>
-        <ul className="text-sm text-purple-700 space-y-1">
-          <li>• Player-specific statistics</li>
-          <li>• Team-based challenges</li>
-          <li>• Player elimination modes</li>
-          <li>• Custom player avatars</li>
-        </ul>
+
       </div>
     </div>
   )

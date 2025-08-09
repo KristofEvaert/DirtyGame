@@ -61,13 +61,13 @@ const Home = () => {
           </div>
         </div>
 
-        {/* Coming Soon Games */}
+        {/* Strip Poker Game - Coming Soon */}
         <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 opacity-75">
           <div className="text-center">
-            <div className="text-5xl mb-4">🎯</div>
-            <h2 className="text-2xl font-bold text-gray-600 mb-3">Truth or Dare Classic</h2>
+            <div className="text-5xl mb-4">🃏</div>
+            <h2 className="text-2xl font-bold text-gray-600 mb-3">Strip Poker</h2>
             <p className="text-gray-500 mb-4">
-              The classic game with both truth questions and dares. Perfect for couples who want variety!
+              Classic strip poker with customizable rules and clothing items. Heat things up with every losing hand!
             </p>
             <div className="flex items-center justify-center mb-4">
               <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
@@ -84,34 +84,13 @@ const Home = () => {
           </div>
         </div>
 
+        {/* Position Game - Coming Soon */}
         <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 opacity-75">
           <div className="text-center">
-            <div className="text-5xl mb-4">💝</div>
-            <h2 className="text-2xl font-bold text-gray-600 mb-3">Love Challenges</h2>
+            <div className="text-5xl mb-4">💫</div>
+            <h2 className="text-2xl font-bold text-gray-600 mb-3">Position Game</h2>
             <p className="text-gray-500 mb-4">
-              Daily and weekly relationship challenges to keep the spark alive!
-            </p>
-            <div className="flex items-center justify-center mb-4">
-              <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
-                🚧 Coming Soon
-              </span>
-            </div>
-            <button
-              disabled
-              className="inline-flex items-center px-6 py-3 bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed"
-            >
-              <Lock className="mr-2 w-5 h-5" />
-              Coming Soon
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 opacity-75">
-          <div className="text-center">
-            <div className="text-5xl mb-4">🔥</div>
-            <h2 className="text-2xl font-bold text-gray-600 mb-3">Spicy Questions</h2>
-            <p className="text-gray-500 mb-4">
-              Deep, intimate questions to learn more about each other and build connection.
+              Discover new intimate positions with guided instructions and difficulty levels for adventurous couples!
             </p>
             <div className="flex items-center justify-center mb-4">
               <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">

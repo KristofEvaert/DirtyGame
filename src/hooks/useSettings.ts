@@ -1,5 +1,17 @@
 import { useState, useEffect } from 'react'
 
+// Cookie utility functions
+const getCookie = (name: string): string | null => {
+  const nameEQ = name + "="
+  const ca = document.cookie.split(';')
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i]
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length)
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length)
+  }
+  return null
+}
+
 export interface GameSettings {
   players: {
     names: string[]
@@ -7,13 +19,10 @@ export interface GameSettings {
   }
   preferences: {
     soundEnabled: boolean
-    theme: 'default' | 'dark' | 'romantic'
     timerDefault: number
     autoAdvanceDifficulty: boolean
   }
   gameOptions: {
-    showPlayerPhotos: boolean
-    enableCustomCards: boolean
     showProgress: boolean
   }
 }
@@ -25,23 +34,32 @@ const defaultSettings: GameSettings = {
   },
   preferences: {
     soundEnabled: true,
-    theme: 'default',
     timerDefault: 90,
     autoAdvanceDifficulty: true
   },
   gameOptions: {
-    showPlayerPhotos: false,
-    enableCustomCards: true,
     showProgress: true
   }
 }
 
 export const useSettings = () => {
   const [settings, setSettings] = useState<GameSettings>(() => {
-    const saved = localStorage.getItem('gameSettings')
+    const saved = getCookie('gameSettings')
     if (saved) {
       try {
-        return JSON.parse(saved)
+        const parsed = JSON.parse(saved)
+        // Clean up old format fields and ensure new structure
+        return {
+          players: parsed.players || defaultSettings.players,
+          preferences: {
+            soundEnabled: parsed.preferences?.soundEnabled ?? defaultSettings.preferences.soundEnabled,
+            timerDefault: parsed.preferences?.timerDefault ?? defaultSettings.preferences.timerDefault,
+            autoAdvanceDifficulty: parsed.preferences?.autoAdvanceDifficulty ?? defaultSettings.preferences.autoAdvanceDifficulty
+          },
+          gameOptions: {
+            showProgress: parsed.gameOptions?.showProgress ?? defaultSettings.gameOptions.showProgress
+          }
+        }
       } catch (e) {
         console.log('Error parsing settings, using defaults:', e)
         return defaultSettings
@@ -51,26 +69,34 @@ export const useSettings = () => {
   })
 
   useEffect(() => {
-    const handleStorageChange = () => {
-      const saved = localStorage.getItem('gameSettings')
+    const handleSettingsChange = () => {
+      const saved = getCookie('gameSettings')
       if (saved) {
         try {
-          setSettings(JSON.parse(saved))
+          const parsed = JSON.parse(saved)
+          // Clean up old format fields and ensure new structure
+          setSettings({
+            players: parsed.players || defaultSettings.players,
+            preferences: {
+              soundEnabled: parsed.preferences?.soundEnabled ?? defaultSettings.preferences.soundEnabled,
+              timerDefault: parsed.preferences?.timerDefault ?? defaultSettings.preferences.timerDefault,
+              autoAdvanceDifficulty: parsed.preferences?.autoAdvanceDifficulty ?? defaultSettings.preferences.autoAdvanceDifficulty
+            },
+            gameOptions: {
+              showProgress: parsed.gameOptions?.showProgress ?? defaultSettings.gameOptions.showProgress
+            }
+          })
         } catch (e) {
-          console.log('Error parsing settings from storage change:', e)
+          console.log('Error parsing settings from change:', e)
         }
       }
     }
 
-    // Listen for changes to localStorage (from other tabs/windows)
-    window.addEventListener('storage', handleStorageChange)
-    
-    // Also listen for custom event when settings change in the same tab
-    window.addEventListener('settingsChanged', handleStorageChange)
+    // Listen for custom event when settings change
+    window.addEventListener('settingsChanged', handleSettingsChange)
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('settingsChanged', handleStorageChange)
+      window.removeEventListener('settingsChanged', handleSettingsChange)
     }
   }, [])
 

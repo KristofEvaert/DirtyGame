@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
 import { Play, Trophy, Target, Flame, RotateCcw, X, Pause, Plus, Minus, PlusCircle } from 'lucide-react'
-import cardsData from '../data/cards.json'
 import { useSettings } from '../hooks/useSettings'
 
 interface GameCard {
@@ -20,6 +19,7 @@ const Game = () => {
   const [currentPlayer, setCurrentPlayer] = useState<string>('')
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState<number>(0)
   const [currentCard, setCurrentCard] = useState<GameCard | null>(null)
+  const [selectedRecipient, setSelectedRecipient] = useState<string>('')
 
   const [isGameActive, setIsGameActive] = useState(false)
   const [players, setPlayers] = useState<string[]>(settings.players.names)
@@ -32,12 +32,30 @@ const Game = () => {
       setCurrentPlayerIndex(0)
     }
   }, [settings.players.names, currentPlayerIndex])
-  const [dareCards, setDareCards] = useState<GameCard[]>(() => {
-    const defaultCards = cardsData.dareCards as GameCard[]
-    const saved = localStorage.getItem('customCards')
-    const customCards = saved ? JSON.parse(saved) : []
-    return [...defaultCards, ...customCards]
-  })
+
+  // Load cards data dynamically on component mount
+  useEffect(() => {
+    const loadCardsData = async () => {
+      try {
+        const response = await fetch('/src/data/cards.json')
+        const cardsData = await response.json()
+        const defaultCards = cardsData.dareCards as GameCard[]
+        const saved = localStorage.getItem('customCards')
+        const customCards = saved ? JSON.parse(saved) : []
+        setDareCards([...defaultCards, ...customCards])
+        setCardsLoaded(true)
+      } catch (error) {
+        console.error('Failed to load cards data:', error)
+        // Fallback to empty array if loading fails
+        setDareCards([])
+        setCardsLoaded(true)
+      }
+    }
+
+    loadCardsData()
+  }, [])
+  const [dareCards, setDareCards] = useState<GameCard[]>([])
+  const [cardsLoaded, setCardsLoaded] = useState<boolean>(false)
   const [timeLeft, setTimeLeft] = useState<number>(settings.preferences.timerDefault)
   const [timerActive, setTimerActive] = useState<boolean>(false)
   const [defaultTimerDuration, setDefaultTimerDuration] = useState<number>(settings.preferences.timerDefault)
@@ -97,17 +115,19 @@ const Game = () => {
   // Save custom cards to localStorage and update available counts
   useEffect(() => {
     localStorage.setItem('customCards', JSON.stringify(customCards))
-    // Update dareCards when customCards changes
-    const defaultCards = cardsData.dareCards as GameCard[]
-    const allCards = [...defaultCards, ...customCards]
-    setDareCards(allCards)
-    
-    // Update available cards count
-    const counts = { easy: 0, medium: 0, hard: 0 }
-    allCards.forEach(card => {
-      counts[card.difficulty]++
-    })
-    setAvailableCardsCount(counts)
+    // Update dareCards when customCards changes - reload from server to get latest data
+    const loadCardsData = async () => {
+      try {
+        const response = await fetch('/src/data/cards.json')
+        const cardsData = await response.json()
+        const defaultCards = cardsData.dareCards as GameCard[]
+        const allCards = [...defaultCards, ...customCards]
+        setDareCards(allCards)
+      } catch (error) {
+        console.error('Failed to reload cards data:', error)
+      }
+    }
+    loadCardsData()
   }, [customCards])
 
   // Update available counts when dareCards change
@@ -147,8 +167,7 @@ const Game = () => {
   const playNaughtySound = () => {
     // Only play sound if enabled in settings
     if (!settings.preferences.soundEnabled) {
-      // Fallback: show alert if sound is disabled
-      alert('⏰ Time\'s up! Better get moving... 😈')
+      // Sound is disabled, no notification needed
       return
     }
     
@@ -184,8 +203,7 @@ const Game = () => {
       
     } catch (error) {
       console.log('Audio not supported:', error)
-      // Fallback: show alert
-      alert('⏰ Time\'s up! Better get moving... 😈')
+      // Audio not supported, no fallback needed
     }
   }
 
@@ -239,6 +257,41 @@ const Game = () => {
     setCustomCards(prev => prev.filter(card => card.id !== cardId))
   }
 
+  const selectRandomRecipient = (currentPlayer: string) => {
+    // Get all players except the current player
+    const otherPlayers = players.filter(player => player !== currentPlayer)
+    
+    if (otherPlayers.length === 0) {
+      return '' // No other players available
+    }
+    
+    // Randomly select one of the other players
+    const randomIndex = Math.floor(Math.random() * otherPlayers.length)
+    return otherPlayers[randomIndex]
+  }
+
+
+
+  const selectRecipientDirectly = () => {
+    if (players.length <= 2) {
+      // Not enough players for recipient selection
+      return
+    }
+    
+    // Directly select a random recipient without showing choice modal
+    const recipient = selectRandomRecipient(currentPlayer)
+    setSelectedRecipient(recipient)
+  }
+
+  const getDisplayCardContent = (card: GameCard, recipient: string): string => {
+    if (!recipient || !card.content.toLowerCase().includes('your partner')) {
+      return card.content
+    }
+    
+    // Replace "your partner" with the recipient's name (case-insensitive)
+    return card.content.replace(/your partner/gi, recipient)
+  }
+
   const getNextPlayer = () => {
     const nextIndex = (currentPlayerIndex + 1) % players.length
     setCurrentPlayerIndex(nextIndex)
@@ -269,17 +322,29 @@ const Game = () => {
   }
 
   const drawCard = () => {
+    if (!cardsLoaded) return
+    
     const nextPlayer = getNextPlayer()
     setCurrentPlayer(nextPlayer)
     
     const availableCards = getAvailableCards()
     
     if (availableCards.length === 0) {
-      alert('No cards available for this level!')
+      console.log('No cards available for this level!')
       return
     }
 
     const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)]
+    
+    // Check if card mentions "your partner" and automatically select recipient
+    if (randomCard.content.toLowerCase().includes('your partner') && players.length > 2) {
+      const recipient = selectRandomRecipient(nextPlayer)
+      setSelectedRecipient(recipient)
+    } else {
+      // Clear previous recipient selection for cards that don't mention partner
+      setSelectedRecipient('')
+    }
+    
     setCurrentCard(randomCard)
     
     // Mark this card as used
@@ -301,6 +366,7 @@ const Game = () => {
     setIsGameActive(false)
     setCurrentCard(null)
     setCurrentPlayer('')
+    setSelectedRecipient('') // Clear selected recipient
     setCurrentPlayerIndex(0) // Reset to first player
     stopTimer() // Stop timer when game stops
   }
@@ -308,7 +374,6 @@ const Game = () => {
   const resetUsedCards = () => {
     if (confirm('Reset used cards? This will allow all cards to appear again in the current session.')) {
       setUsedCardIds(new Set())
-      alert('All cards are now available again!')
     }
   }
 
@@ -320,8 +385,8 @@ const Game = () => {
       const newPoints = Math.max(0, prev.totalPoints + 2)
       let newDifficulty = prev.currentDifficulty
       
-      // Auto-advance difficulty when progress bar fills up (every 50 points)
-      if (newPoints >= 50 && newPoints % 50 === 0) {
+      // Auto-advance difficulty when progress bar fills up (every 50 points) - only if enabled
+      if (settings.preferences.autoAdvanceDifficulty && newPoints >= 50 && newPoints % 50 === 0) {
         if (prev.currentDifficulty === 'easy') {
           newDifficulty = 'medium'
           console.log('Auto-advancing from Easy to Medium!')
@@ -354,6 +419,8 @@ const Game = () => {
     } else {
       setCurrentCard(null)
       setCurrentPlayer('')
+      setSelectedRecipient('')
+
     }
   }
 
@@ -407,6 +474,8 @@ const Game = () => {
     } else {
       setCurrentCard(null)
       setCurrentPlayer('')
+      setSelectedRecipient('')
+
     }
   }
 
@@ -536,6 +605,18 @@ const Game = () => {
 
 
 
+  if (!cardsLoaded) {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-12">
+        <div className="bg-white rounded-lg shadow-lg p-8 border border-gray-200">
+          <div className="text-6xl mb-4">🔄</div>
+          <h2 className="text-2xl font-bold text-purple-800 mb-2">Loading Game Data...</h2>
+          <p className="text-gray-600">Please wait while we load the latest cards.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="text-center mb-3">
@@ -571,27 +652,27 @@ const Game = () => {
         )}
       </div>
 
-      {/* Unified Progress Bar */}
-      <div className="card mb-3 py-3">
-        <div className="flex items-center justify-center mb-2">
-          {getLevelIcon(gameProgress.currentDifficulty)}
-          <span className={`ml-1 text-sm font-semibold ${getLevelColor(gameProgress.currentDifficulty)}`}>
-            {getLevelName(gameProgress.currentDifficulty)} Level
-          </span>
+      {/* Unified Progress Bar - Only show if enabled */}
+      {settings.gameOptions.showProgress && (
+        <div className="card mb-3 py-3">
+          <div className="flex items-center justify-center mb-2">
+            {getLevelIcon(gameProgress.currentDifficulty)}
+            <span className={`ml-1 text-sm font-semibold ${getLevelColor(gameProgress.currentDifficulty)}`}>
+              {getLevelName(gameProgress.currentDifficulty)} Level
+            </span>
+          </div>
+          
+          <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+            <div 
+              className={`h-3 rounded-full transition-all duration-500 ${
+                gameProgress.currentDifficulty === 'easy' ? 'bg-green-600' :
+                gameProgress.currentDifficulty === 'medium' ? 'bg-yellow-600' : 'bg-red-600'
+              }`}
+              style={{ width: `${progressPercentage}%` }}
+            ></div>
+          </div>
         </div>
-        
-        <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
-          <div 
-            className={`h-3 rounded-full transition-all duration-500 ${
-              gameProgress.currentDifficulty === 'easy' ? 'bg-green-600' :
-              gameProgress.currentDifficulty === 'medium' ? 'bg-yellow-600' : 'bg-red-600'
-            }`}
-            style={{ width: `${progressPercentage}%` }}
-          ></div>
-        </div>
-        
-        
-      </div>
+      )}
 
       {/* Game Controls */}
       <div className="card mb-3 py-3">
@@ -768,8 +849,48 @@ const Game = () => {
             </div>
 
             <div className="bg-gray-50 rounded-lg p-3 mb-3">
-              <p className="text-base text-gray-800">{currentCard.content}</p>
+              <p className="text-base text-gray-800">{getDisplayCardContent(currentCard, selectedRecipient)}</p>
             </div>
+
+            {/* Recipient Selection - Only show for cards that don't automatically assign partner */}
+            {players.length > 2 && !selectedRecipient && 
+             !currentCard.content.toLowerCase().includes('your partner') && (
+              <div className="mb-3">
+                <button
+                  onClick={selectRecipientDirectly}
+                  className="px-3 py-2 text-sm font-medium rounded bg-purple-100 hover:bg-purple-200 text-purple-700"
+                >
+                  👥 Choose Someone Specific
+                </button>
+              </div>
+            )}
+
+
+
+            {/* Selected Recipient Display */}
+            {selectedRecipient && (
+              <div className="mb-3 p-2 bg-pink-50 rounded-lg border border-pink-200">
+                <p className="text-sm text-pink-700">
+                  <strong>
+                    {currentCard.content.toLowerCase().includes('your partner') ? 'Partner:' : 'With:'}
+                  </strong> {selectedRecipient}
+                  <button
+                    onClick={() => {
+                      if (currentCard.content.toLowerCase().includes('your partner') && players.length > 2) {
+                        // Re-select a different random recipient
+                        const newRecipient = selectRandomRecipient(currentPlayer)
+                        setSelectedRecipient(newRecipient)
+                      } else {
+                        setSelectedRecipient('')
+                      }
+                    }}
+                    className="ml-2 text-xs text-pink-600 hover:text-pink-800 underline"
+                  >
+                    (change)
+                  </button>
+                </p>
+              </div>
+            )}
             
             <div className="flex gap-2 justify-center">
               <button
