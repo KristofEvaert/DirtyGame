@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Heart, Zap, RotateCcw, Play, Users, Trophy, Target, Flame, Star, Minus, Plus } from 'lucide-react'
+import { Play, Trophy, Target, Flame, RotateCcw, X, Pause, Plus, Minus, PlusCircle } from 'lucide-react'
 import cardsData from '../data/cards.json'
 
 interface GameCard {
@@ -9,78 +9,205 @@ interface GameCard {
   difficulty: 'easy' | 'medium' | 'hard'
 }
 
-interface GameHistory {
-  id: string
-  timestamp: Date
-  player: string
-  card: GameCard
-  score: number // 1-5
-  scoredBy: string // who gave the score
-}
-
-interface PlayerProgress {
-  name: string
-  easyPoints: number
-  mediumPoints: number
-  hardPoints: number
-  currentLevel: 'easy' | 'medium' | 'hard'
-  pointsGiven: number // total points given to partner
-  pointsReceived: number // total points received from partner
+interface GameProgress {
+  totalPoints: number
+  currentDifficulty: 'easy' | 'medium' | 'hard'
 }
 
 const Game = () => {
   const [currentPlayer, setCurrentPlayer] = useState<string>('')
   const [currentCard, setCurrentCard] = useState<GameCard | null>(null)
-  const [isCardRevealed, setIsCardRevealed] = useState(false)
-  const [showScoring, setShowScoring] = useState(false)
-  const [players] = useState<string[]>(['You', 'Your Wife'])
-  const [dareCards] = useState<GameCard[]>(cardsData.dareCards as GameCard[])
-  
-  // Progressive game state - now using combined points
-  const [playerProgress, setPlayerProgress] = useState<PlayerProgress[]>(() => {
-    const saved = localStorage.getItem('playerProgress')
-    if (saved) {
-      return JSON.parse(saved)
-    }
-    return [
-      { name: 'You', easyPoints: 0, mediumPoints: 0, hardPoints: 0, currentLevel: 'easy' as const, pointsGiven: 0, pointsReceived: 0 },
-      { name: 'Your Wife', easyPoints: 0, mediumPoints: 0, hardPoints: 0, currentLevel: 'easy' as const, pointsGiven: 0, pointsReceived: 0 }
-    ]
-  })
 
-  const [gameHistory, setGameHistory] = useState<GameHistory[]>(() => {
-    const saved = localStorage.getItem('gameHistory')
+  const [isGameActive, setIsGameActive] = useState(false)
+  const [players] = useState<string[]>(['You', 'Your Wife'])
+  const [dareCards, setDareCards] = useState<GameCard[]>(() => {
+    const defaultCards = cardsData.dareCards as GameCard[]
+    const saved = localStorage.getItem('customCards')
+    const customCards = saved ? JSON.parse(saved) : []
+    return [...defaultCards, ...customCards]
+  })
+  const [timeLeft, setTimeLeft] = useState<number>(90) // 1.5 minutes in seconds
+  const [timerActive, setTimerActive] = useState<boolean>(false)
+  const [defaultTimerDuration, setDefaultTimerDuration] = useState<number>(90) // Remember user's preferred duration
+  const [showAddCardModal, setShowAddCardModal] = useState<boolean>(false)
+  const [customCards, setCustomCards] = useState<GameCard[]>(() => {
+    const saved = localStorage.getItem('customCards')
+    return saved ? JSON.parse(saved) : []
+  })
+  const [newCardContent, setNewCardContent] = useState<string>('')
+  const [newCardDifficulty, setNewCardDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy')
+  
+  // Unified progress system
+  const [gameProgress, setGameProgress] = useState<GameProgress>(() => {
+    const saved = localStorage.getItem('gameProgress')
     if (saved) {
-      const parsedHistory = JSON.parse(saved)
-      return parsedHistory.map((entry: any) => ({
-        ...entry,
-        timestamp: new Date(entry.timestamp)
-      }))
+      try {
+        const parsed = JSON.parse(saved)
+        // Handle migration from old format
+        if (parsed.currentLevel !== undefined) {
+          // Old format - convert level to difficulty
+          let difficulty: 'easy' | 'medium' | 'hard' = 'easy'
+          if (parsed.currentLevel <= 3) {
+            difficulty = 'easy'
+          } else if (parsed.currentLevel <= 6) {
+            difficulty = 'medium'
+          } else {
+            difficulty = 'hard'
+          }
+          return { totalPoints: parsed.totalPoints || 0, currentDifficulty: difficulty }
+        }
+        // New format - ensure it has the right structure
+        return {
+          totalPoints: parsed.totalPoints || 0,
+          currentDifficulty: parsed.currentDifficulty || 'easy'
+        }
+      } catch (e) {
+        console.log('Error parsing saved progress, resetting:', e)
+        return { totalPoints: 0, currentDifficulty: 'easy' }
+      }
     }
-    return []
+    return { totalPoints: 0, currentDifficulty: 'easy' }
   })
 
   // Save progress to localStorage
   useEffect(() => {
-    localStorage.setItem('playerProgress', JSON.stringify(playerProgress))
-  }, [playerProgress])
+    localStorage.setItem('gameProgress', JSON.stringify(gameProgress))
+  }, [gameProgress])
+
+  // Save custom cards to localStorage
+  useEffect(() => {
+    localStorage.setItem('customCards', JSON.stringify(customCards))
+    // Update dareCards when customCards changes
+    const defaultCards = cardsData.dareCards as GameCard[]
+    setDareCards([...defaultCards, ...customCards])
+  }, [customCards])
+
+  // Timer effect
+  useEffect(() => {
+    let interval: number | null = null
+    
+    if (timerActive && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft(time => {
+          if (time <= 1) {
+            // Timer ran out - play naughty sound
+            playNaughtySound()
+            setTimerActive(false)
+            return 0
+          }
+          return time - 1
+        })
+      }, 1000)
+    } else if (!timerActive) {
+      if (interval) clearInterval(interval)
+    }
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [timerActive, timeLeft])
+
+  const playNaughtySound = () => {
+    // Create audio context for naughty sound effect
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      
+      // Create a series of tones for a playful "naughty" sound
+      const playTone = (frequency: number, duration: number, delay: number) => {
+        setTimeout(() => {
+          const oscillator = audioContext.createOscillator()
+          const gainNode = audioContext.createGain()
+          
+          oscillator.connect(gainNode)
+          gainNode.connect(audioContext.destination)
+          
+          oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime)
+          oscillator.type = 'sine'
+          
+          gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration)
+          
+          oscillator.start(audioContext.currentTime)
+          oscillator.stop(audioContext.currentTime + duration)
+        }, delay)
+      }
+      
+      // Play a playful descending tone sequence
+      playTone(800, 0.2, 0)    // High
+      playTone(600, 0.2, 200)  // Medium
+      playTone(400, 0.3, 400)  // Low
+      playTone(500, 0.4, 700)  // Back up with longer tone
+      
+    } catch (error) {
+      console.log('Audio not supported:', error)
+      // Fallback: show alert
+      alert('⏰ Time\'s up! Better get moving... 😈')
+    }
+  }
+
+  const startTimer = () => {
+    setTimerActive(true)
+  }
+
+  const pauseTimer = () => {
+    setTimerActive(false)
+  }
+
+  const stopTimer = () => {
+    setTimerActive(false)
+    setTimeLeft(defaultTimerDuration) // Reset to user's preferred duration
+  }
+
+  const adjustTime = (seconds: number) => {
+    setTimeLeft(prev => {
+      const newTime = prev + seconds
+      // Min 30 seconds (0.5 min), Max 150 seconds (2.5 min)
+      const adjustedTime = Math.max(30, Math.min(150, newTime))
+      // Update the default duration when user adjusts time
+      setDefaultTimerDuration(adjustedTime)
+      return adjustedTime
+    })
+  }
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const addCustomCard = () => {
+    if (!newCardContent.trim()) return
+
+    const newCard: GameCard = {
+      id: `custom-${Date.now()}`,
+      type: 'dare',
+      content: newCardContent.trim(),
+      difficulty: newCardDifficulty
+    }
+
+    setCustomCards(prev => [...prev, newCard])
+    setNewCardContent('')
+    setNewCardDifficulty('easy')
+    setShowAddCardModal(false)
+  }
+
+  const removeCustomCard = (cardId: string) => {
+    setCustomCards(prev => prev.filter(card => card.id !== cardId))
+  }
 
   const getRandomPlayer = () => {
     return players[Math.floor(Math.random() * players.length)]
   }
 
-  const getAvailableCards = (playerName: string) => {
-    const player = playerProgress.find(p => p.name === playerName)
-    if (!player) return dareCards.filter(card => card.difficulty === 'easy')
-    
-    return dareCards.filter(card => card.difficulty === player.currentLevel)
+  const getAvailableCards = () => {
+    return dareCards.filter(card => card.difficulty === gameProgress.currentDifficulty)
   }
 
   const drawCard = () => {
     const randomPlayer = getRandomPlayer()
     setCurrentPlayer(randomPlayer)
     
-    const availableCards = getAvailableCards(randomPlayer)
+    const availableCards = getAvailableCards()
     
     if (availableCards.length === 0) {
       alert('No cards available for this level!')
@@ -89,86 +216,174 @@ const Game = () => {
 
     const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)]
     setCurrentCard(randomCard)
-    setIsCardRevealed(false)
-    setShowScoring(false)
+    // Reset timer to user's preferred duration for new card
+    setTimeLeft(defaultTimerDuration)
+    setTimerActive(false) // Don't auto-start timer - let user control it
   }
 
-  const scoreCard = (score: number) => {
-    if (!currentCard || !currentPlayer) return
+  const startGame = () => {
+    setIsGameActive(true)
+    drawCard()
+  }
 
-    // Determine who is scoring (the other player)
-    const scoringPlayer = currentPlayer === 'You' ? 'Your Wife' : 'You'
-
-    const historyEntry: GameHistory = {
-      id: Date.now().toString(),
-      timestamp: new Date(),
-      player: currentPlayer,
-      card: currentCard,
-      score: score,
-      scoredBy: scoringPlayer
-    }
-
-    // Update game history
-    const newHistory = [historyEntry, ...gameHistory]
-    setGameHistory(newHistory)
-    localStorage.setItem('gameHistory', JSON.stringify(newHistory))
-
-    // Update player progress — fixed TDZ by avoiding reading "newProgress" while creating it
-    setPlayerProgress(prev => {
-      // 1) First pass: apply the score changes to points + given/received
-      const next = prev.map(player => {
-        if (player.name === currentPlayer) {
-          const updatedPlayer = { ...player }
-
-          if (currentCard.difficulty === 'easy') {
-            updatedPlayer.easyPoints += score
-          } else if (currentCard.difficulty === 'medium') {
-            updatedPlayer.mediumPoints += score
-          } else if (currentCard.difficulty === 'hard') {
-            updatedPlayer.hardPoints += score
-          }
-
-          updatedPlayer.pointsReceived += score
-          return updatedPlayer
-        } else if (player.name === scoringPlayer) {
-          return { ...player, pointsGiven: player.pointsGiven + score }
-        }
-        return player
-      })
-
-      // 2) Compute totals from the fully-built "next" array
-      const totalEasyPoints = next.reduce((sum, p) => sum + p.easyPoints, 0)
-      const totalMediumPoints = next.reduce((sum, p) => sum + p.mediumPoints, 0)
-
-      // 3) Optionally advance the *current player's* level based on combined totals
-      const advanced = next.map(p => {
-        if (p.name !== currentPlayer) return p
-        const updated = { ...p }
-        if (updated.currentLevel === 'easy' && totalEasyPoints >= 25) {
-          updated.currentLevel = 'medium'
-        } else if (updated.currentLevel === 'medium' && totalMediumPoints >= 25) {
-          updated.currentLevel = 'hard'
-        }
-        return updated
-      })
-
-      return advanced
-    })
-
+  const stopGame = () => {
+    setIsGameActive(false)
     setCurrentCard(null)
     setCurrentPlayer('')
-    setShowScoring(false)
+    stopTimer() // Stop timer when game stops
+  }
+
+  const completeCard = () => {
+    if (!currentCard || !currentPlayer) return
+
+    // Add 2 points for completing a dare
+    setGameProgress(prev => {
+      const newPoints = Math.max(0, prev.totalPoints + 2)
+      let newDifficulty = prev.currentDifficulty
+      
+      // Auto-advance difficulty when progress bar fills up (every 50 points)
+      if (newPoints >= 50 && newPoints % 50 === 0) {
+        if (prev.currentDifficulty === 'easy') {
+          newDifficulty = 'medium'
+          console.log('Auto-advancing from Easy to Medium!')
+          // Reset points when advancing level
+          return {
+            totalPoints: 0,
+            currentDifficulty: newDifficulty
+          }
+        } else if (prev.currentDifficulty === 'medium') {
+          newDifficulty = 'hard'
+          console.log('Auto-advancing from Medium to Hard!')
+          // Reset points when advancing level
+          return {
+            totalPoints: 0,
+            currentDifficulty: newDifficulty
+          }
+        }
+        // Don't auto-advance from Hard - let them stay there or manually go back
+      }
+      
+      return {
+        totalPoints: newPoints,
+        currentDifficulty: newDifficulty
+      }
+    })
+
+    // If game is active, automatically draw the next card
+    if (isGameActive) {
+      drawCard()
+    } else {
+      setCurrentCard(null)
+      setCurrentPlayer('')
+    }
+  }
+
+  const skipCard = () => {
+    if (!currentCard || !currentPlayer) return
+
+    // Lose 1 point for skipping a dare
+    setGameProgress(prev => {
+      const newPoints = prev.totalPoints - 1
+      let newDifficulty = prev.currentDifficulty
+      
+      // Auto-downgrade difficulty when points go below 0
+      if (newPoints < 0) {
+        if (prev.currentDifficulty === 'hard') {
+          newDifficulty = 'medium'
+          console.log('Auto-downgrading from Hard to Medium due to negative points!')
+          // Reset to max points of previous level (50 points)
+          return {
+            totalPoints: 49, // Almost full progress bar at medium level
+            currentDifficulty: newDifficulty
+          }
+        } else if (prev.currentDifficulty === 'medium') {
+          newDifficulty = 'easy'
+          console.log('Auto-downgrading from Medium to Easy due to negative points!')
+          // Reset to max points of previous level (50 points)
+          return {
+            totalPoints: 49, // Almost full progress bar at easy level
+            currentDifficulty: newDifficulty
+          }
+        } else {
+          // Already at Easy level - can't go lower, just stay at 0 points
+          return {
+            totalPoints: 0,
+            currentDifficulty: 'easy'
+          }
+        }
+      }
+      
+      return {
+        totalPoints: Math.max(0, newPoints),
+        currentDifficulty: newDifficulty
+      }
+    })
+
+    // Stop timer when card is skipped
+    stopTimer()
+
+    // If game is active, automatically draw the next card
+    if (isGameActive) {
+      drawCard()
+    } else {
+      setCurrentCard(null)
+      setCurrentPlayer('')
+    }
   }
 
   const resetProgress = () => {
     if (confirm('Are you sure you want to reset all progress? This cannot be undone.')) {
-      const resetProgress: PlayerProgress[] = [
-        { name: 'You', easyPoints: 0, mediumPoints: 0, hardPoints: 0, currentLevel: 'easy', pointsGiven: 0, pointsReceived: 0 },
-        { name: 'Your Wife', easyPoints: 0, mediumPoints: 0, hardPoints: 0, currentLevel: 'easy', pointsGiven: 0, pointsReceived: 0 }
-      ]
-      setPlayerProgress(resetProgress)
-      setGameHistory([])
-      localStorage.removeItem('gameHistory')
+      const resetProgress: GameProgress = { totalPoints: 0, currentDifficulty: 'easy' }
+      setGameProgress(resetProgress)
+      stopGame()
+    }
+  }
+
+  const heatUp = () => {
+    console.log('Heating up from:', gameProgress.currentDifficulty)
+    setGameProgress(prev => {
+      let newDifficulty: 'easy' | 'medium' | 'hard' = prev.currentDifficulty
+      if (prev.currentDifficulty === 'easy') {
+        newDifficulty = 'medium'
+      } else if (prev.currentDifficulty === 'medium') {
+        newDifficulty = 'hard'
+      }
+      // If already at hard, stay at hard
+      console.log('New difficulty:', newDifficulty)
+      // Reset points when manually changing difficulty
+      return { totalPoints: 0, currentDifficulty: newDifficulty }
+    })
+    
+    // If game is active, draw a new card with the new difficulty
+    if (isGameActive) {
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        drawCard()
+      }, 100)
+    }
+  }
+
+  const coolDown = () => {
+    console.log('Cooling down from:', gameProgress.currentDifficulty)
+    setGameProgress(prev => {
+      let newDifficulty: 'easy' | 'medium' | 'hard' = prev.currentDifficulty
+      if (prev.currentDifficulty === 'hard') {
+        newDifficulty = 'medium'
+      } else if (prev.currentDifficulty === 'medium') {
+        newDifficulty = 'easy'
+      }
+      // If already at easy, stay at easy
+      console.log('New difficulty:', newDifficulty)
+      // Reset points when manually changing difficulty
+      return { totalPoints: 0, currentDifficulty: newDifficulty }
+    })
+    
+    // If game is active, draw a new card with the new difficulty
+    if (isGameActive) {
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        drawCard()
+      }, 100)
     }
   }
 
@@ -181,325 +396,410 @@ const Game = () => {
     }
   }
 
-  const getLevelIcon = (level: string): React.ReactElement => {
-    switch (level) {
-      case 'easy': return <Target className="w-5 h-5" />
-      case 'medium': return <Flame className="w-5 h-5" />
-      case 'hard': return <Trophy className="w-5 h-5" />
-      default: return <Target className="w-5 h-5" />
+  const getLevelIcon = (difficulty: 'easy' | 'medium' | 'hard'): React.ReactElement => {
+    switch (difficulty) {
+      case 'easy': return <Target className="w-4 h-4" />
+      case 'medium': return <Flame className="w-4 h-4" />
+      case 'hard': return <Trophy className="w-4 h-4" />
     }
   }
 
-  const getLevelColor = (level: string) => {
-    switch (level) {
+  const getLevelColor = (difficulty: 'easy' | 'medium' | 'hard') => {
+    switch (difficulty) {
       case 'easy': return 'text-green-600'
       case 'medium': return 'text-yellow-600'
       case 'hard': return 'text-red-600'
-      default: return 'text-green-600'
     }
   }
 
-  const getScoreColor = (score: number) => {
-    switch (score) {
-      case 5: return 'text-purple-600'
-      case 4: return 'text-blue-600'
-      case 3: return 'text-green-600'
-      case 2: return 'text-yellow-600'
-      case 1: return 'text-red-600'
-      default: return 'text-gray-600'
+  const getLevelName = (difficulty: 'easy' | 'medium' | 'hard') => {
+    switch (difficulty) {
+      case 'easy': return 'Easy'
+      case 'medium': return 'Medium'
+      case 'hard': return 'Hard'
     }
   }
 
-  const getScoreText = (score: number) => {
-    switch (score) {
-      case 5: return 'Perfect'
-      case 4: return 'Great'
-      case 3: return 'Good'
-      case 2: return 'Fair'
-      case 1: return 'Poor'
-      default: return 'Unknown'
+  const getHeatUpText = () => {
+    switch (gameProgress.currentDifficulty) {
+      case 'easy': return "Ready for something steamier? 🔥"
+      case 'medium': return "Time to get really naughty... 😈"
+      case 'hard': return "You're already at maximum heat! 🌶️"
     }
   }
 
-  const getScoreBgColor = (score: number) => {
-    switch (score) {
-      case 5: return 'bg-purple-100 hover:bg-purple-200'
-      case 4: return 'bg-blue-100 hover:bg-blue-200'
-      case 3: return 'bg-green-100 hover:bg-green-200'
-      case 2: return 'bg-yellow-100 hover:bg-yellow-200'
-      case 1: return 'bg-red-100 hover:bg-red-200'
-      default: return 'bg-gray-100 hover:bg-gray-200'
+  const getCoolDownText = () => {
+    switch (gameProgress.currentDifficulty) {
+      case 'easy': return "You're already at the coolest level! ❄️"
+      case 'medium': return "Need to cool things down? 🧊"
+      case 'hard': return "Too hot to handle? Cool it down... ❄️"
     }
   }
 
-  // Calculate total points for each level
-  const totalEasyPoints = playerProgress.reduce((sum, p) => sum + p.easyPoints, 0)
-  const totalMediumPoints = playerProgress.reduce((sum, p) => sum + p.mediumPoints, 0)
-  const totalHardPoints = playerProgress.reduce((sum, p) => sum + p.hardPoints, 0)
+  const getHeatUpButtonText = () => {
+    switch (gameProgress.currentDifficulty) {
+      case 'easy': return "🔥 Heat Up"
+      case 'medium': return "😈 Get Wild"
+      case 'hard': return "🌶️ Max Heat"
+    }
+  }
+
+  const getCoolDownButtonText = () => {
+    switch (gameProgress.currentDifficulty) {
+      case 'easy': return "❄️ Min Cool"
+      case 'medium': return "🧊 Cool Down"
+      case 'hard': return "❄️ Cool Down"
+    }
+  }
+
+  // Calculate progress within current level (0-100%) - now just shows total points as progress
+  const progressPercentage = Math.min((gameProgress.totalPoints / 50) * 100, 100) // Cap at 100%
+
+
 
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-purple-800 mb-2">Progressive Dare Challenge</h1>
-        <p className="text-gray-600">Earn 15 points together to advance to the next level!</p>
+      <div className="text-center mb-4">
+        <h1 className="text-3xl font-bold text-purple-800 mb-1">Dare no truth</h1>
+        <p className="text-gray-600">Complete dares to advance through the levels!</p>
       </div>
 
-      {/* Combined Progress */}
-      <div className="card mb-8">
-        <h2 className="text-xl font-semibold mb-4 flex items-center justify-center">
-          <Trophy className="mr-2" />
-          Combined Progress
+      {/* Unified Progress Bar */}
+      <div className="card mb-4">
+        <h2 className="text-lg font-semibold mb-4 flex items-center justify-center">
+          {getLevelIcon(gameProgress.currentDifficulty)}
+          <span className={`ml-2 ${getLevelColor(gameProgress.currentDifficulty)}`}>
+            {getLevelName(gameProgress.currentDifficulty)} Level
+          </span>
         </h2>
         
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center">
-              <Target className="w-4 h-4 mr-2 text-green-600" />
-              Easy Level
-            </span>
-            <span className="font-semibold">
-              {totalEasyPoints}/25
-            </span>
-          </div>
-          
-          <div className="w-full bg-gray-200 rounded-full h-3">
+        <div className="relative">
+          {/* Progress Bar */}
+          <div className="w-full bg-gray-200 rounded-full h-4 mb-4">
             <div 
-              className="bg-green-600 h-3 rounded-full transition-all duration-300"
-              style={{ width: `${Math.min((totalEasyPoints / 25) * 100, 100)}%` }}
+              className={`h-4 rounded-full transition-all duration-500 ${
+                gameProgress.currentDifficulty === 'easy' ? 'bg-green-600' :
+                gameProgress.currentDifficulty === 'medium' ? 'bg-yellow-600' : 'bg-red-600'
+              }`}
+              style={{ width: `${progressPercentage}%` }}
             ></div>
           </div>
+          
 
-          <div className="flex items-center justify-between">
-            <span className="flex items-center">
-              <Flame className="w-4 h-4 mr-2 text-yellow-600" />
-              Medium Level
-            </span>
-            <span className="font-semibold">
-              {totalMediumPoints}/25
-            </span>
-          </div>
-          
-          <div className="w-full bg-gray-200 rounded-full h-3">
-            <div 
-              className="bg-yellow-600 h-3 rounded-full transition-all duration-300"
-              style={{ width: `${Math.min((totalMediumPoints / 25) * 100, 100)}%` }}
-            ></div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <span className="flex items-center">
-              <Trophy className="w-4 h-4 mr-2 text-red-600" />
-              Hard Level
-            </span>
-            <span className="font-semibold">
-              {totalHardPoints}/25
-            </span>
-          </div>
-          
-          <div className="w-full bg-gray-200 rounded-full h-3">
-            <div 
-              className="bg-red-600 h-3 rounded-full transition-all duration-300"
-              style={{ width: `${Math.min((totalHardPoints / 25) * 100, 100)}%` }}
-            ></div>
-          </div>
         </div>
-      </div>
+        
 
-      {/* Individual Player Progress */}
-      <div className="grid md:grid-cols-2 gap-6 mb-8">
-        {playerProgress.map((player) => (
-          <div key={player.name} className="card">
-            <h2 className="text-xl font-semibold mb-4 flex items-center">
-              <Users className="mr-2" />
-              {player.name}
-            </h2>
-            
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <Target className="w-4 h-4 mr-2 text-green-600" />
-                  Easy Points
-                </span>
-                <span className="font-semibold">
-                  {player.easyPoints}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <Flame className="w-4 h-4 mr-2 text-yellow-600" />
-                  Medium Points
-                </span>
-                <span className="font-semibold">
-                  {player.mediumPoints}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="flex items-center">
-                  <Trophy className="w-4 h-4 mr-2 text-red-600" />
-                  Hard Points
-                </span>
-                <span className="font-semibold">
-                  {player.hardPoints}
-                </span>
-              </div>
-
-              <div className="border-t pt-3 mt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Points Given:</span>
-                  <span className="font-semibold text-blue-600">{player.pointsGiven}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Points Received:</span>
-                  <span className="font-semibold text-green-600">{player.pointsReceived}</span>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3 bg-purple-50 rounded-lg">
-                <div className="flex items-center justify-center">
-                  <span className="mr-2">Current Level:</span>
-                  <span className={`font-bold ${getLevelColor(player.currentLevel)}`}>
-                    {player.currentLevel.toUpperCase()}
-                  </span>
-                  <span className="ml-2">
-                    {getLevelIcon(player.currentLevel)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Game Controls */}
-      <div className="card mb-8">
+      <div className="card mb-4">
         <div className="text-center">
-          <button
-            onClick={drawCard}
-            className="btn-primary text-lg px-8 py-4 flex items-center mx-auto"
-          >
-            <Play className="mr-2" />
-            Draw Random Dare
-          </button>
-          
-          <button
-            onClick={resetProgress}
-            className="mt-4 btn-secondary"
-          >
-            Reset All Progress
-          </button>
+          {!isGameActive ? (
+            <>
+              <button
+                onClick={startGame}
+                className="btn-primary text-lg px-8 py-4 flex items-center mx-auto"
+              >
+                <Play className="mr-2" />
+                Start Dare Challenge
+              </button>
+              
+              <div className="mt-4 text-center">
+                <div className="flex gap-3 justify-center mb-2">
+                  <button
+                    onClick={coolDown}
+                    disabled={gameProgress.currentDifficulty === 'easy'}
+                    className={`px-4 py-2 font-semibold rounded-lg transition-colors text-white ${
+                      gameProgress.currentDifficulty === 'easy'
+                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                        : 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600'
+                    }`}
+                    title={getCoolDownText()}
+                  >
+                    {getCoolDownButtonText()}
+                  </button>
+                  
+                  <button
+                    onClick={heatUp}
+                    disabled={gameProgress.currentDifficulty === 'hard'}
+                    className={`px-4 py-2 font-semibold rounded-lg transition-colors text-white ${
+                      gameProgress.currentDifficulty === 'hard'
+                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                        : 'bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600'
+                    }`}
+                    title={getHeatUpText()}
+                  >
+                    {getHeatUpButtonText()}
+                  </button>
+                </div>
+              </div>
+              
+              <div className="mt-4 flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowAddCardModal(true)}
+                  className="btn-primary bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                >
+                  <PlusCircle className="mr-2 w-4 h-4" />
+                  Add Custom Dare
+                </button>
+                
+                <button
+                  onClick={resetProgress}
+                  className="btn-secondary"
+                >
+                  <RotateCcw className="mr-2 w-4 h-4" />
+                  Reset Progress
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="flex gap-3 justify-center items-center">
+              <button
+                onClick={stopGame}
+                className="text-lg px-6 py-4 flex items-center font-semibold rounded-lg transition-colors bg-red-100 hover:bg-red-200 text-red-700"
+              >
+                <X className="mr-2" />
+                Stop Game
+              </button>
+              
+              <button
+                onClick={coolDown}
+                disabled={gameProgress.currentDifficulty === 'easy'}
+                className={`text-lg px-6 py-4 flex items-center font-semibold rounded-lg transition-colors text-white ${
+                  gameProgress.currentDifficulty === 'easy'
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600'
+                }`}
+                title={getCoolDownText()}
+              >
+                {getCoolDownButtonText()}
+              </button>
+              
+              <button
+                onClick={heatUp}
+                disabled={gameProgress.currentDifficulty === 'hard'}
+                className={`text-lg px-6 py-4 flex items-center font-semibold rounded-lg transition-colors text-white ${
+                  gameProgress.currentDifficulty === 'hard'
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600'
+                }`}
+                title={getHeatUpText()}
+              >
+                {getHeatUpButtonText()}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Current Card Display */}
       {currentCard && (
-        <div className="card mb-8">
+        <div className="card mb-4">
           <div className="text-center">
             <div className="mb-4">
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getDifficultyColor(currentCard.difficulty)}`}>
-                {currentCard.difficulty.toUpperCase()}
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getDifficultyColor(gameProgress.currentDifficulty)}`}>
+                {gameProgress.currentDifficulty.toUpperCase()}
               </span>
             </div>
             
-            <div className="mb-6">
-              <div className="text-6xl mb-4 text-red-500">
+            <div className="mb-4">
+              <div className="text-5xl mb-2 text-red-500">
                 ⚡
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+              <h2 className="text-xl font-bold text-gray-800 mb-1">
                 DARE
               </h2>
-              <p className="text-lg text-gray-600">
+              <p className="text-base text-gray-600">
                 Player: <span className="font-semibold text-purple-600">{currentPlayer}</span>
               </p>
             </div>
 
-            {!isCardRevealed ? (
-              <button
-                onClick={() => setIsCardRevealed(true)}
-                className="btn-primary text-lg px-8 py-3"
-              >
-                Reveal Dare
-              </button>
-            ) : !showScoring ? (
-              <div className="space-y-4">
-                <div className="bg-gray-50 rounded-lg p-6 mb-4">
-                  <p className="text-xl text-gray-800">{currentCard.content}</p>
+            <div className="space-y-4">
+              {/* Timer Controls */}
+              <div className="text-center mb-4">
+                <div className={`inline-flex items-center px-4 py-2 rounded-full font-bold text-lg mb-3 ${
+                  timeLeft <= 30 
+                    ? 'bg-red-100 text-red-700 animate-pulse' 
+                    : timeLeft <= 60 
+                      ? 'bg-yellow-100 text-yellow-700' 
+                      : 'bg-green-100 text-green-700'
+                }`}>
+                  ⏰ {formatTime(timeLeft)}
                 </div>
                 
+                {/* Timer Control Buttons */}
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <button
+                    onClick={() => adjustTime(-30)}
+                    disabled={timeLeft <= 30}
+                    className={`p-2 rounded-full ${
+                      timeLeft <= 30 
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                        : 'bg-blue-100 hover:bg-blue-200 text-blue-700'
+                    }`}
+                    title="Subtract 30 seconds"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  
+                  <button
+                    onClick={timerActive ? pauseTimer : startTimer}
+                    className={`px-4 py-2 rounded-lg font-semibold text-white ${
+                      timerActive 
+                        ? 'bg-orange-500 hover:bg-orange-600' 
+                        : 'bg-green-500 hover:bg-green-600'
+                    }`}
+                  >
+                    {timerActive ? (
+                      <>
+                        <Pause className="w-4 h-4 mr-1 inline" />
+                        Pause
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 mr-1 inline" />
+                        Start
+                      </>
+                    )}
+                  </button>
+                  
+                  <button
+                    onClick={() => adjustTime(30)}
+                    disabled={timeLeft >= 150}
+                    className={`p-2 rounded-full ${
+                      timeLeft >= 150 
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                        : 'bg-red-100 hover:bg-red-200 text-red-700'
+                    }`}
+                    title="Add 30 seconds"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                {timeLeft <= 30 && timerActive && (
+                  <p className="text-sm text-red-600 mt-1 animate-bounce">
+                    Hurry up! Time's running out... 😈
+                  </p>
+                )}
+                
+                <p className="text-xs text-gray-500 mt-1">
+                  Range: 0:30 - 2:30 | Adjust: ±30sec
+                </p>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4 mb-3">
+                <p className="text-lg text-gray-800">{currentCard.content}</p>
+              </div>
+              
+              <div className="flex gap-4 justify-center">
                 <button
-                  onClick={() => setShowScoring(true)}
-                  className="btn-primary flex items-center mx-auto"
+                  onClick={completeCard}
+                  className="btn-primary flex items-center px-6 py-3"
                 >
-                  <Star className="mr-2" />
-                  Rate Performance
+                  ✅ Completed (+2 points)
+                </button>
+                <button
+                  onClick={skipCard}
+                  className="btn-secondary flex items-center px-6 py-3 bg-red-100 hover:bg-red-200 text-red-700"
+                >
+                  <X className="mr-2 w-4 h-4" />
+                  Skip (-1 point)
                 </button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="bg-gray-50 rounded-lg p-6 mb-4">
-                  <p className="text-xl text-gray-800">{currentCard.content}</p>
-                </div>
-                
-                <div className="mb-4">
-                  <p className="text-lg font-semibold text-gray-700 mb-3">
-                    How well did {currentPlayer} complete this dare?
-                  </p>
-                  <p className="text-sm text-gray-600 mb-4">
-                    The other player should rate the performance (1-5):
-                  </p>
-                </div>
-                
-                <div className="grid grid-cols-5 gap-2 justify-center">
-                  {[1, 2, 3, 4, 5].map((score) => (
-                    <button
-                      key={score}
-                      onClick={() => scoreCard(score)}
-                      className={`flex flex-col items-center p-3 rounded-lg transition-colors ${getScoreBgColor(score)}`}
-                    >
-                      <span className="text-2xl font-bold mb-1">{score}</span>
-                      <span className="text-xs font-medium">{getScoreText(score)}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Recent History */}
-      {gameHistory.length > 0 && (
-        <div className="card">
-          <h2 className="text-xl font-semibold mb-4">Recent History</h2>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {gameHistory.slice(0, 10).map((entry) => (
-              <div
-                key={entry.id}
-                className={`flex items-center justify-between p-3 rounded-lg border ${
-                  entry.score >= 4 ? 'bg-green-50 border-green-200' : 
-                  entry.score >= 3 ? 'bg-yellow-50 border-yellow-200' : 
-                  'bg-red-50 border-red-200'
+      {/* Add Custom Card Modal */}
+      {showAddCardModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Add Custom Dare</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dare Content
+                </label>
+                <textarea
+                  value={newCardContent}
+                  onChange={(e) => setNewCardContent(e.target.value)}
+                  placeholder="Enter your custom dare here..."
+                  className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Difficulty Level
+                </label>
+                <select
+                  value={newCardDifficulty}
+                  onChange={(e) => setNewCardDifficulty(e.target.value as 'easy' | 'medium' | 'hard')}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={addCustomCard}
+                disabled={!newCardContent.trim()}
+                className={`flex-1 py-3 px-4 rounded-lg font-semibold ${
+                  newCardContent.trim()
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                <div className="flex items-center space-x-3">
-                  <span className="text-2xl text-red-500">⚡</span>
-                  <div>
-                    <p className="font-medium text-gray-800">{entry.player}</p>
-                    <p className="text-sm text-gray-600">{entry.card.content}</p>
-                    <p className="text-xs text-gray-500">Scored by: {entry.scoredBy}</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${getDifficultyColor(entry.card.difficulty)}`}>
-                    {entry.card.difficulty}
-                  </span>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${getScoreColor(entry.score)}`}>
-                    {entry.score}/5 ({getScoreText(entry.score)})
-                  </span>
+                <PlusCircle className="w-4 h-4 mr-2 inline" />
+                Add Dare
+              </button>
+              
+              <button
+                onClick={() => {
+                  setShowAddCardModal(false)
+                  setNewCardContent('')
+                  setNewCardDifficulty('easy')
+                }}
+                className="flex-1 py-3 px-4 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+            
+            {/* Show existing custom cards */}
+            {customCards.length > 0 && (
+              <div className="mt-6 border-t pt-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">
+                  Your Custom Dares ({customCards.length})
+                </h3>
+                <div className="max-h-32 overflow-y-auto space-y-2">
+                  {customCards.map((card) => (
+                    <div key={card.id} className="flex items-start justify-between p-2 bg-gray-50 rounded text-sm">
+                      <div className="flex-1">
+                        <p className="text-gray-800">{card.content}</p>
+                        <span className={`inline-block px-2 py-1 rounded text-xs mt-1 ${getDifficultyColor(card.difficulty)}`}>
+                          {card.difficulty}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => removeCustomCard(card.id)}
+                        className="ml-2 text-red-500 hover:text-red-700"
+                        title="Remove card"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </div>
       )}
