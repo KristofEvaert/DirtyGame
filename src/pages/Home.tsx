@@ -61,26 +61,26 @@ const Home = () => {
           </div>
         </div>
 
-        {/* Strip Poker Game - Coming Soon */}
-        <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 opacity-75">
+        {/* Strip Poker Game - Available */}
+        <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 hover:shadow-xl transition-shadow">
           <div className="text-center">
             <div className="text-5xl mb-4">🃏</div>
-            <h2 className="text-2xl font-bold text-gray-600 mb-3">Strip Poker</h2>
-            <p className="text-gray-500 mb-4">
-              Classic strip poker with customizable rules and clothing items. Heat things up with every losing hand!
+            <h2 className="text-2xl font-bold text-purple-800 mb-3">Strip Poker</h2>
+            <p className="text-gray-600 mb-4">
+              Classic strip poker with a spicy twist! Lose a hand, lose some clothes. Perfect for couples looking to heat things up!
             </p>
             <div className="flex items-center justify-center mb-4">
-              <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
-                🚧 Coming Soon
+              <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                ✅ Available Now
               </span>
             </div>
-            <button
-              disabled
-              className="inline-flex items-center px-6 py-3 bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed"
+            <a
+              href="/strip-poker"
+              className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors"
             >
-              <Lock className="mr-2 w-5 h-5" />
-              Coming Soon
-            </button>
+              <Play className="mr-2 w-5 h-5" />
+              Play Now
+            </a>
           </div>
         </div>
 
@@ -157,7 +157,7 @@ const Home = () => {
         <Sparkles className="h-12 w-12 text-purple-600 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-purple-800 mb-3">Ready to Heat Things Up?</h2>
         <p className="text-gray-600 mb-6">Choose your game and see where the night takes you!</p>
-        <div className="flex gap-4 justify-center">
+        <div className="flex gap-4 justify-center flex-wrap">
           <a
             href="/game"
             className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors shadow-lg"
@@ -171,6 +171,13 @@ const Home = () => {
           >
             <Play className="mr-2 w-5 h-5" />
             Dice Game
+          </a>
+          <a
+            href="/strip-poker"
+            className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white font-bold rounded-lg hover:from-red-700 hover:to-orange-700 transition-colors shadow-lg"
+          >
+            <Play className="mr-2 w-5 h-5" />
+            Strip Poker
           </a>
         </div>
       </div>
