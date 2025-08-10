@@ -573,7 +573,6 @@ const StripPoker = () => {
             <div className="absolute inset-8 rounded-full border-2 border-amber-600 bg-green-800 bg-opacity-20 flex items-center justify-center">
               <div className="text-center">
                 <div className="text-4xl mb-2">🃏</div>
-                <div className="text-amber-200 text-sm font-semibold">STRIP POKER</div>
               </div>
             </div>
 
