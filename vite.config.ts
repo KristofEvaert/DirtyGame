@@ -9,10 +9,17 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: './index.html'
+      },
+      output: {
+        format: 'es',
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     },
     assetsInlineLimit: 0,
-    chunkSizeWarningLimit: 1000
+    chunkSizeWarningLimit: 1000,
+    target: 'es2015'
   },
   server: {
     port: 3000,
