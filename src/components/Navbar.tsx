@@ -17,7 +17,8 @@ const Navbar = ({ sidebarOpen, setSidebarOpen }: NavbarProps) => {
             <Menu className="h-6 w-6" />
           </button>
           
-          <div className="flex-1 flex justify-center">
+          {/* Center the title properly accounting for sidebar space on large screens */}
+          <div className="flex-1 flex justify-center lg:justify-center lg:ml-32">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 bg-clip-text text-transparent animate-pulse relative">
               🔥 No BS Adult Games 🔥
               <span className="absolute -top-1 -right-1 text-xs animate-bounce">✨</span>
