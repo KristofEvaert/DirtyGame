@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "serve": "node scripts/serve.js",
     "lint": "eslint . --ext js,jsx,ts,tsx",
     "lint:fix": "eslint . --ext js,jsx,ts,tsx --fix",
     "predeploy": "node scripts/deploy.js",
