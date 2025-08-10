@@ -751,8 +751,8 @@ const StripPoker = () => {
     )
     
     if (activeHands.length === 0) {
-      // All players folded - no winner, everyone loses clothes
-      const losers = scoreBasedRound.foldedPlayers
+      // All players folded - no winner, but folded players don't lose clothes in score-based mode
+      const losers: string[] = [] // No one loses clothes when everyone folds
       
       setScoreBasedRound(prev => ({
         ...prev!,
@@ -765,9 +765,8 @@ const StripPoker = () => {
         isComplete: true
       }))
       
-      // Remove clothing from all players (everyone loses when all fold)
+      // No clothing removal when everyone folds (folded players are safe)
       setTimeout(() => {
-        removeClothingFromLosers(losers)
         // Add a small delay to ensure state updates are processed before allowing next round
         setTimeout(() => {
           setWaitingForFolds(false)
@@ -778,7 +777,7 @@ const StripPoker = () => {
       // Only one player left, they win
       const winner = activeHands[0].playerId
       const winners = [winner] // Single winner when only one player remains
-      const losers = scoreBasedRound.foldedPlayers
+      const losers: string[] = [] // Folded players don't lose clothes in score-based mode
       
       setScoreBasedRound(prev => ({
         ...prev!,
@@ -791,9 +790,8 @@ const StripPoker = () => {
         isComplete: true
       }))
       
-      // Remove clothing from losers
+      // No clothing removal (folded players are safe in score-based mode)
       setTimeout(() => {
-        removeClothingFromLosers(losers)
         // Add a small delay to ensure state updates are processed before allowing next round
         setTimeout(() => {
           setWaitingForFolds(false)
