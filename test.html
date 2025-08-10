@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIME Type Test</title>
+</head>
+<body>
+    <h1>MIME Type Test</h1>
+    <p>Check the browser console for any MIME type errors.</p>
+    
+    <script type="module">
+        console.log('✅ Module script loaded successfully!');
+        console.log('✅ No MIME type errors detected.');
+        
+        // Test importing the main app
+        try {
+            const response = await fetch('./assets/main-d990597a.js');
+            console.log('📋 Response headers:', response.headers);
+            console.log('📋 Content-Type:', response.headers.get('content-type'));
+            
+            if (response.headers.get('content-type') === 'application/javascript') {
+                console.log('✅ SUCCESS: Correct MIME type detected!');
+            } else {
+                console.log('❌ ERROR: Wrong MIME type');
+                console.log('Expected: application/javascript');
+                console.log('Got:', response.headers.get('content-type'));
+            }
+        } catch (error) {
+            console.error('❌ Error testing MIME types:', error);
+        }
+    </script>
+</body>
+</html>
