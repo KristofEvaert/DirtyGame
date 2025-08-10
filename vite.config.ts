@@ -10,7 +10,9 @@ export default defineConfig({
       input: {
         main: './index.html'
       }
-    }
+    },
+    assetsInlineLimit: 0,
+    chunkSizeWarningLimit: 1000
   },
   server: {
     port: 3000,

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint . --ext js,jsx,ts,tsx",
     "lint:fix": "eslint . --ext js,jsx,ts,tsx --fix",
-    "deploy": "npm run build && gh-pages -d dist"
+    "predeploy": "node scripts/deploy.js",
+    "deploy": "npm run build && npm run predeploy && gh-pages -d dist"
   },
   "dependencies": {
     "react": "^18.2.0",
