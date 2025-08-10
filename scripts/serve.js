@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const PORT = 8080;
+const PORT = 3001;
 
 // MIME type mapping
 const mimeTypes = {
@@ -72,6 +72,18 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}/`);
+  console.log(`✅ Server running at http://localhost:${PORT}/`);
+  console.log('📁 Serving files from dist/ directory');
+  console.log('🔧 Proper MIME types configured for JavaScript modules');
   console.log('Press Ctrl+C to stop');
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use. Try a different port:`);
+    console.error(`   node scripts/serve.js --port 3002`);
+  } else {
+    console.error('❌ Server error:', err.message);
+  }
+  process.exit(1);
 });

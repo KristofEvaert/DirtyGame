@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "serve": "node scripts/serve.js",
+    "test-mime": "node scripts/test-mime.js",
     "lint": "eslint . --ext js,jsx,ts,tsx",
     "lint:fix": "eslint . --ext js,jsx,ts,tsx --fix",
     "predeploy": "node scripts/deploy.js",
