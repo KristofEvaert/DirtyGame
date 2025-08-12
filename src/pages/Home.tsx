@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 import { Heart, Play, Sparkles, Lock, Settings } from 'lucide-react'
 
 const Home = () => {
@@ -28,13 +29,13 @@ const Home = () => {
                 ✅ Available Now
               </span>
             </div>
-            <a
-              href="/game"
+            <Link
+              to="/game"
               className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors"
             >
               <Play className="mr-2 w-5 h-5" />
               Play Now
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -51,13 +52,13 @@ const Home = () => {
                 ✅ Available Now
               </span>
             </div>
-            <a
-              href="/dice"
+            <Link
+              to="/dice"
               className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors"
             >
               <Play className="mr-2 w-5 h-5" />
               Roll Dice
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -74,36 +75,36 @@ const Home = () => {
                 ✅ Available Now
               </span>
             </div>
-            <a
-              href="/strip-poker"
+            <Link
+              to="/strip-poker"
               className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors"
             >
               <Play className="mr-2 w-5 h-5" />
               Play Now
-            </a>
+            </Link>
           </div>
         </div>
 
-        {/* Position Game - Coming Soon */}
-        <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 opacity-75">
+        {/* Strip Game - Available */}
+        <div className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 hover:shadow-xl transition-shadow">
           <div className="text-center">
-            <div className="text-5xl mb-4">💫</div>
-            <h2 className="text-2xl font-bold text-gray-600 mb-3">Position Game</h2>
-            <p className="text-gray-500 mb-4">
-              Discover new intimate positions with guided instructions and difficulty levels for adventurous couples!
+            <div className="text-5xl mb-4">👕</div>
+            <h2 className="text-2xl font-bold text-purple-800 mb-3">Strip Game</h2>
+            <p className="text-gray-600 mb-4">
+              A fun game for 2-8 players to add and remove clothes! Choose your starting clothes and let the fun begin!
             </p>
             <div className="flex items-center justify-center mb-4">
-              <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
-                🚧 Coming Soon
+              <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+                ✅ Available Now
               </span>
             </div>
-            <button
-              disabled
-              className="inline-flex items-center px-6 py-3 bg-gray-300 text-gray-500 font-semibold rounded-lg cursor-not-allowed"
+            <Link
+              to="/strip-game"
+              className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors"
             >
-              <Lock className="mr-2 w-5 h-5" />
-              Coming Soon
-            </button>
+              <Play className="mr-2 w-5 h-5" />
+              Play Now
+            </Link>
           </div>
         </div>
 
@@ -119,13 +120,13 @@ const Home = () => {
                 ✅ Available Now
               </span>
             </div>
-            <a
-              href="/settings"
+            <Link
+              to="/settings"
               className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors"
             >
               <Settings className="mr-2 w-5 h-5" />
               Configure
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -158,27 +159,27 @@ const Home = () => {
         <h2 className="text-2xl font-bold text-purple-800 mb-3">Ready to Heat Things Up?</h2>
         <p className="text-gray-600 mb-6">Choose your game and see where the night takes you!</p>
         <div className="flex gap-4 justify-center flex-wrap">
-          <a
-            href="/game"
+          <Link
+            to="/game"
             className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors shadow-lg"
           >
             <Play className="mr-2 w-5 h-5" />
             Dare Game
-          </a>
-          <a
-            href="/dice"
+          </Link>
+          <Link
+            to="/dice"
             className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-pink-600 to-red-600 text-white font-bold rounded-lg hover:from-pink-700 hover:to-red-700 transition-colors shadow-lg"
           >
             <Play className="mr-2 w-5 h-5" />
             Dice Game
-          </a>
-          <a
-            href="/strip-poker"
+          </Link>
+          <Link
+            to="/strip-poker"
             className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white font-bold rounded-lg hover:from-red-700 hover:to-orange-700 transition-colors shadow-lg"
           >
             <Play className="mr-2 w-5 h-5" />
             Strip Poker
-          </a>
+          </Link>
         </div>
       </div>
     </div>

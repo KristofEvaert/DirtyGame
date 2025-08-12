@@ -12,6 +12,30 @@ const timestamp = new Date().toISOString();
 fs.writeFileSync(timestampPath, `Last updated: ${timestamp}\n`);
 console.log('Created timestamp file for cache busting');
 
+// Copy JSON files to dist directory for runtime access
+const dataDir = path.join(__dirname, '../src/data');
+const distDir = path.join(__dirname, '../dist');
+
+// Create src/data directory structure in dist
+const distDataDir = path.join(distDir, 'src', 'data');
+if (!fs.existsSync(distDataDir)) {
+  fs.mkdirSync(distDataDir, { recursive: true });
+}
+
+// Copy JSON files
+const jsonFiles = ['cards.json', 'dice.json'];
+jsonFiles.forEach(file => {
+  const sourcePath = path.join(dataDir, file);
+  const destPath = path.join(distDataDir, file);
+  
+  if (fs.existsSync(sourcePath)) {
+    fs.copyFileSync(sourcePath, destPath);
+    console.log(`Copied ${file} to dist/src/data/`);
+  } else {
+    console.log(`Warning: ${file} not found in src/data/`);
+  }
+});
+
 // Check if assets directory exists and contains JS files
 const assetsPath = path.join(__dirname, '../dist/assets');
 if (fs.existsSync(assetsPath)) {
